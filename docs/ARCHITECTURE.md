@@ -234,6 +234,11 @@ Compares the simulator's expected observations with the telemetry actually recei
 Resolved 2026-08-26: mixture semantics — wells track exact composition by volume (volume-additive,
 homogeneous), and labelled stock concentrations dilute by volume fraction. See WORLD_MODEL.md.
 
+Candidate v0.2 scope, from evidence of what real protocols need:
+[COOKBOOK_FINDINGS.md](COOKBOOK_FINDINGS.md) — seven gaps in implementation order (per-well tables,
+reservoirs/waste, delay, tip economy, position/flow control, magnetic module, multi-channel), with the
+Cookbook's bead-wash workflow as the acceptance test.
+
 ## 9. Build Order for v0.1
 
 1. World model schema (Inventory, Deck incl. tip racks + linker table, Hardware incl. sensor model).

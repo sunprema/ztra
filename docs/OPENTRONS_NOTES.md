@@ -117,6 +117,11 @@ driver requires ≥ 2.22 (`D_API_LEVEL` otherwise). The harness monkeypatches `c
 mid-run, which the vendor engine tolerates. Value confirmed: a second, vendor-written model of what a healthy
 run does; ideal pipettes, so it complements the `FakeDriver` (noise, faults) rather than replacing it.
 
+## What real protocols need
+
+The vendor's community Cookbook was reviewed 2026-08-26 as evidence of what working protocols actually
+do; findings and the resulting gap list live in [COOKBOOK_FINDINGS.md](COOKBOOK_FINDINGS.md).
+
 ## Not yet used, worth knowing
 
 - Modules (temperature, heater-shaker, thermocycler, magnetic block, plate reader 2.21, Flex stacker 2.25): a real
