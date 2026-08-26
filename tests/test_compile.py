@@ -3,7 +3,7 @@
 import pytest
 
 from tests.conftest import EXAMPLES
-from ztra.compiler import MAX_PATHS, CompileOutput, compile
+from ztra.compiler import MAX_PATHS, CompileOutput, PathOutcome, compile
 from ztra.compiler_errors import CompileError
 from ztra.pir import count
 from ztra.protocol import Protocol
@@ -33,7 +33,9 @@ def test_demo_protocol_compiles_to_two_outcomes(world: World) -> None:
     assert count(out.pir) == 10  # thaw + 3 transfers + transfer + mix + observe + branch + 2 arm ops
     then, els = out.outcomes
     assert then.conditions[0].holds and not els.conditions[0].holds
-    b1 = lambda o: total_ul(o.world.inventory.plates["P1"].wells["B1"])  # noqa: E731
+    def b1(o: PathOutcome) -> float:
+        return total_ul(o.world.inventory.plates["P1"].wells["B1"])
+
     assert b1(then) == pytest.approx(85.0)
     assert b1(els) == pytest.approx(200.0)
     assert len(then.world.inventory.plates["P1"].wells["B2"]) == 2, "B2 received the water+enzyme mixture"

@@ -1,5 +1,7 @@
 # ztra
 
+[![CI](https://github.com/sunprema/ztra/actions/workflows/ci.yml/badge.svg)](https://github.com/sunprema/ztra/actions/workflows/ci.yml)
+
 **ztra** lets an AI agent run experiments on a lab robot without anyone having to just trust it.
 
 Right now it covers one job: moving small amounts of liquid around 96-well plates with a pipetting robot (an Opentrons). That sounds narrow, but it's the bread and butter of biology labs, and it's exactly the kind of repetitive, precise work you'd want to hand to software.

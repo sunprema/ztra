@@ -18,7 +18,8 @@ from ztra.world import World
 from ztra.world.hardware import Range, SensorKind
 from ztra.world.inventory import total_ul
 
-CLOCK = lambda: "2026-08-26T10:00:00+00:00"  # noqa: E731
+def CLOCK() -> str:
+    return "2026-08-26T10:00:00+00:00"
 
 
 def lab(store: Store, branch: str, seed: int = 0, faults: dict | None = None, accurate: bool = False, adapters: dict | None = None, approve: bool = True) -> tuple[Runtime, FakeDriver]:  # type: ignore[type-arg]
@@ -27,7 +28,10 @@ def lab(store: Store, branch: str, seed: int = 0, faults: dict | None = None, ac
     driver = FakeDriver(physical, seed=seed, accurate=accurate, faults=faults)
     sensors = dict(adapters or {})
     for sid in physical.hardware.sensors:
-        sensors.setdefault(sid, SimulatedSensor(lambda d=driver: d.physical, seed=seed + 1))
+        def snapshot(d: FakeDriver = driver) -> World:
+            return d.physical
+
+        sensors.setdefault(sid, SimulatedSensor(snapshot, seed=seed + 1))
     rt = Runtime(store, driver, TelemetryService(physical.hardware, sensors, CLOCK), approve=lambda _c, _f: approve, clock=CLOCK)
     return rt, driver
 

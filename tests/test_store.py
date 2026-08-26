@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from tests.conftest import EXAMPLES
-from ztra.compiler import CompileError
+from ztra.compiler_errors import CompileError
 from ztra.protocol import Protocol
 from ztra.sensors import Telemetry
 from ztra.store import IntentCommit, ObservationCommit, RootCommit, Store, StoreError, commit_hash

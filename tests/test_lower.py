@@ -71,7 +71,9 @@ def test_continuation_after_a_branch_is_copied_per_path(world: World) -> None:
   - { op: transfer, from: { vial: V_water }, to: { plate: P1, well: A4 }, volume_ul: 20 }
 """
     prog = program(world, y)
-    tips = lambda seg: [o.well for o in prog.segments[seg].ops if isinstance(o, PickUpTip)]  # noqa: E731
+    def tips(seg: int) -> list[str]:
+        return [o.well for o in prog.segments[seg].ops if isinstance(o, PickUpTip)]
+
     assert tips(1) == ["C1", "D1", "E1"], "then-arm + continuation"
     assert tips(2) == ["C1", "D1"], "else-arm + continuation"
 
