@@ -1,0 +1,163 @@
+# Protocol Language & Compiler (v1)
+
+A protocol is **data** (FR-2.5): a YAML/JSON document of the AST below. The compiler is an **abstract
+interpreter** (FR-2.1): it unrolls the protocol into PIR-H and then *executes* it against a clone of the
+world model, checking every physical precondition at every step. Example: [`examples/protocols/demo.yaml`](../examples/protocols/demo.yaml).
+
+```
+ztra compile <world_dir> <protocol.yaml> [--no-worlds]
+  → { ok: true,  pir: [...], outcomes: [ { conditions, world_hash, cost, trace, world } ] }
+  → { ok: false, error: { code, step_path, iterations, branch_path, physical_law, resource,
+                          coordinate, expected, actual, hint, chain_of_thought } }   exit 1
+```
+
+---
+
+## 1. AST
+
+```yaml
+version: 1
+name: optional_name
+steps:
+  - op: thaw
+    vial: V_enzyme                          # frozen → thawed, freeze_thaw_cycles += 1
+
+  - op: transfer
+    from: { vial: V_water }                 # a Loc: { vial: id } or { plate: id, well: A1 }
+    to:   { plate: P1, well: B1 }
+    volume_ul: 50                           # one fresh tip per transfer
+
+  - op: mix
+    at: { plate: P1, well: B1 }
+    volume_ul: 100
+    repetitions: 5                          # default 3; one fresh tip
+
+  - op: repeat                              # static bound, fully unrolled
+    times: 3
+    body: [ ...steps... ]
+
+  - op: for_wells                           # once per well; $w stands for the well inside
+    wells: [A2..E2, H2]                     # names, or same-column / same-row ranges
+    as: w                                   # default: well  (so $well)
+    body:
+      - { op: transfer, from: { vial: V_water }, to: { plate: P1, well: $w }, volume_ul: 180 }
+
+  - op: observe                             # take a reading; the label names it
+    sensor: scale_1                         # must exist in Hardware.sensors
+    label: after_fill
+
+  - op: if_observed                         # branch on an earlier observation
+    observation: after_fill
+    condition: { metric: mass_mg, cmp: ge, value: 215 }   # cmp: gt | ge | lt | le
+    then: [ ...steps... ]
+    otherwise: [ ...steps... ]              # optional
+```
+
+Unknown fields and unknown `op`s are rejected at load.
+
+### Language rules (FR-2.6 — total and bounded)
+
+- `repeat.times` is a literal ≥ 1; `for_wells.wells` is an explicit list. There is no `while`, no recursion, no arithmetic.
+- `$name` may appear only in `well:` fields and only inside a `for_wells` that binds it; nested loops need different names.
+- `if_observed` may only test an `observe` that appears **earlier on the same path**. A label taken inside
+  one arm of a branch is not visible after the branch.
+- Branching multiplies the number of paths the compiler must check; more than **64 paths** (`MAX_PATHS`)
+  is `E_TOO_MANY_PATHS`.
+- Vials hold a single reagent; mixtures live in plate wells (`E_MIXTURE_IN_VIAL`).
+
+## 2. PIR-H
+
+The unrolled, checkable form (ARCHITECTURE §4.4). Each op carries its `origin` — the AST `step_path` and one
+iteration number per enclosing `repeat` — so errors, costs and diffs can point back at the protocol.
+
+| Op | Fields | From |
+|---|---|---|
+| `transform` | `kind: thaw \| transfer \| mix`, `inputs: [{loc, volume_ul}]`, `outputs: [...]`, `repetitions?` | `thaw`, `transfer`, `mix` |
+| `observe` | `sensor`, `entity` (what it observes), `label` | `observe` |
+| `branch` | `observation`, `condition`, `then: [PIR-H]`, `otherwise: [PIR-H]` | `if_observed` |
+
+`branch` is a **structural** op added to the three data ops of the original design: a flat instruction list
+cannot express a data-dependent choice, and lowering needs to know where the robot pauses for a decision.
+`move` exists in the design but is not emitted by v0.1 liquid handling.
+
+## 3. Checking semantics
+
+The checker runs PIR-H against a clone of the world. At a `branch` it **forks the world** and continues the
+*rest of the protocol* separately on each arm — path-sensitive, not a pessimistic join — so a step after a
+branch is checked against exactly the state each path produces. Prediction is therefore a **set of
+outcomes**, one per path, each carrying:
+
+- `conditions` — the branch decisions that lead here (`after_fill: mass_mg >= 215 => true`)
+- `world` and `world_hash` — the predicted world model on that path
+- `cost` — `thaws, transfers, aspirations, mixes, tips_used, observations, reagent_consumed_ul{}, estimated_time_s`
+- `trace` — the chain of thought (NFR-5.1)
+
+An unconditional protocol has exactly one outcome. All outcomes are checked; the first violation on any path
+aborts compilation with an error whose `branch_path` says which path.
+
+Per-step transitions and checks:
+
+| Step | Preconditions (error) | Transition |
+|---|---|---|
+| `thaw` | vial exists (`E_UNKNOWN_ENTITY`) | state → thawed; cycles += 1 |
+| `for_wells` | wells well-formed (`E_WELL_RANGE`), non-empty, variable not already bound | body unrolled once per well with `$name` substituted |
+| `transfer` | volume > 0 and ≥ smallest pipette min (`E_PIPETTE_RANGE`); source exists, not consumed (`E_CONSUMED`), thawed if a vial (`E_STATE`), holds ≥ volume (`E_VOLUME`); destination exists (`E_UNKNOWN_ENTITY`, `E_COORDINATE`), has capacity (`E_OVERFLOW`), no incompatible hazard classes meet (`E_HAZARD`), vial destination holds the same reagent (`E_MIXTURE_IN_VIAL`); a free compatible tip exists on the deck (`E_TIPS`) | liquid moves (mixtures move proportionally); a source vial reaching 0 becomes `consumed`; one tip is marked used; stock consumption is costed |
+| `mix` | volume within one pipette's range (no splitting), the well holds ≥ volume, a free tip | one tip used; contents unchanged |
+| `observe` | sensor exists (`E_UNKNOWN_SENSOR`) | none; cost += `read_time_s` |
+| `if_observed` | label observed earlier on this path (`E_UNKNOWN_OBSERVATION`) | fork |
+
+Volumes above every pipette's maximum are accepted for `transfer` and costed as ⌈v / max⌉ aspiration
+cycles; lowering (step 3) performs the split. Tips are allocated column-major (A1, B1, … H1, A2, …) from
+placed racks compatible with the chosen pipette, in rack-id order.
+
+Before anything else the world must validate with zero errors (`E_WORLD_INVALID`) and the protocol version
+must match (`E_PROTOCOL_VERSION`).
+
+## 4. Error codes
+
+| Code | Physical law |
+|---|---|
+| `E_WORLD_INVALID` | the world model must validate before compiling |
+| `E_PROTOCOL_VERSION` | protocol schema version mismatch |
+| `E_LOOP_BOUND` | `repeat.times` must be ≥ 1; `for_wells.wells` must not be empty |
+| `E_WELL_RANGE` | a `for_wells` item is not a well name or a same-row / same-column range |
+| `E_UNBOUND_VARIABLE` | `$name` used outside a `for_wells` that binds it |
+| `E_VARIABLE_SHADOWED` | nested `for_wells` reusing a variable name |
+| `E_UNKNOWN_SENSOR` | `observe` must name a sensor in `Hardware.sensors` |
+| `E_UNKNOWN_OBSERVATION` | `if_observed` must test an earlier observation on the same path |
+| `E_TOO_MANY_PATHS` | > `MAX_PATHS` branch paths |
+| `E_UNKNOWN_ENTITY` | vial / plate does not exist |
+| `E_COORDINATE` | well is not on the plate's labware |
+| `E_PIPETTE_RANGE` | volume not servable by any pipette |
+| `E_CONSUMED` | consumed linear resource reused |
+| `E_STATE` | aspiration from a frozen vial |
+| `E_VOLUME` | aspirating more than present |
+| `E_OVERFLOW` | destination over labware capacity |
+| `E_HAZARD` | incompatible MSDS classes meeting in one vessel |
+| `E_MIXTURE_IN_VIAL` | a second reagent into a vial |
+| `E_TIPS` | no free compatible tip on the deck |
+
+Every error carries `step_path` (AST path), `iterations` (one per enclosing `repeat`/`for_wells`), `bindings` on each PIR op's origin (which well each variable was), `branch_path`,
+`physical_law`, `resource`, `coordinate`, `expected`, `actual`, `hint`, and `chain_of_thought` (FR-2.4).
+
+## 5. Pre-flight
+
+`ztra preflight <world> <protocol> [--budget …]` (MCP: `preflight_protocol`) walks every path to the end and reports
+the whole budget at once (`feasible: true|false` plus the figures) — stock per vial and per reagent (with other vials of the same reagent named), tips per
+pipette against free tips on the deck, wells whose peak volume exceeds the labware, and frozen vials used without
+a thaw — worst case across branch paths. Resource-related compile errors (`E_VOLUME`, `E_TIPS`, `E_OVERFLOW`,
+`E_CONSUMED`, `E_STATE`) carry the same `preflight` summary, so an error at step 11 also says "short by 440 µL overall".
+
+## 6. Cost model (NFR-5.2)
+
+`estimated_time_s` = aspiration cycles × 12 s + tip changes × 4 s + mix repetitions × 2 s + Σ sensor
+`read_time_s`. Constants live in `CostModel` and are placeholders until measured on the robot. Thaw time is
+not modelled.
+
+## 7. Not in v1
+
+- Static deck clearance checks (`E_DECK`) — with lowering, step 3.
+- Concentration tracking — needs the mixture model (ARCHITECTURE §8).
+- Evaluating conditions — the compiler never decides a branch; the runtime does, from telemetry.
+
+Implementation: `src/ztra/protocol.py`, `src/ztra/pir.py`, `src/ztra/compiler.py`.

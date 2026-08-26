@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "ztra": {
+      "command": ".venv/bin/ztra-mcp"
+    }
+  }
+}

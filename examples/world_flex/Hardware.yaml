@@ -1,0 +1,53 @@
+version: 1
+
+robot:
+  vendor: opentrons
+  model: flex
+  api_level: "2.16"
+
+pipettes:
+  - name: flex_1channel_1000
+    mount: right
+    channels: 1
+    min_ul: 5
+    max_ul: 1000
+    tip_labware: [opentrons_flex_96_tiprack_1000ul]
+    accuracy: { systematic_pct: 2.0, random_pct: 1.0, random_ul: 0.5 }   # placeholder until measured
+
+labware:
+  corning_96_wellplate_360ul_flat:
+    kind: plate
+    rows: 8
+    cols: 12
+    well_max_ul: 360
+    height_mm: 14.2
+  opentrons_24_tuberack_nest_1.5ml_snapcap:
+    kind: tube_rack
+    rows: 4
+    cols: 6
+    well_max_ul: 1500
+    height_mm: 43.0
+  opentrons_flex_96_tiprack_1000ul:
+    kind: tip_rack
+    rows: 8
+    cols: 12
+    tip_volume_ul: 1000
+    height_mm: 99.0
+
+sensors:
+  scale_1:
+    kind: plate_mass
+    observes: { entity: P1 }
+    sigma: 0.5
+    unit: mg
+    read_time_s: 5
+  camera_1:
+    kind: well_volume
+    observes: { entity: P1, columns: [1] }
+    sigma: 5
+    unit: uL
+    read_time_s: 2
+
+safe_envelope:
+  temperature_c: { min: 4, max: 40 }
+  max_flow_rate_ul_s: 300

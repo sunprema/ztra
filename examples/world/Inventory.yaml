@@ -1,0 +1,41 @@
+# What exists. Reagents carry an MSDS hazard class (CON-3); vials are linear
+# resources (FR-1.3); plates list only non-empty wells.
+version: 1
+
+reagents:
+  water:
+    hazard: inert
+  hcl_1m:
+    hazard: acid
+    concentration: "1 M"
+    msds: "msds/hcl.pdf"
+  naoh_1m:
+    hazard: base
+    concentration: "1 M"
+    msds: "msds/naoh.pdf"
+  enzyme_x:
+    hazard: inert
+    concentration: "10 U/uL"
+
+vials:
+  V_water:
+    reagent: water
+    volume_ul: 1000
+  V_hcl:
+    reagent: hcl_1m
+    volume_ul: 200
+  V_naoh:
+    reagent: naoh_1m
+    volume_ul: 200
+  V_enzyme:
+    reagent: enzyme_x
+    volume_ul: 150
+    state: frozen
+    freeze_thaw_cycles: 1
+
+plates:
+  P1:
+    labware: corning_96_wellplate_360ul_flat
+    wells:
+      A1:
+        - { reagent: water, volume_ul: 50 }

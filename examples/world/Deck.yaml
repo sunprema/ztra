@@ -1,0 +1,25 @@
+# Where things are. Slot names follow the robot model in Hardware.yaml
+# (OT-2: "1".."12", trash fixed at 12). The linker gives every vial a physical
+# address so lowering can resolve it (CON-6).
+version: 1
+
+slots:
+  "1": { entity: P1 }
+  "2": { entity: TR1 }
+  "3": { entity: TIPS1 }
+  "12": { trash: true }
+
+tube_racks:
+  TR1:
+    labware: opentrons_24_tuberack_nest_1.5ml_snapcap
+
+tip_racks:
+  TIPS1:
+    labware: opentrons_96_tiprack_300ul
+    used: [A1, B1]          # tips are linear too (CON-4)
+
+linker:
+  V_water:  { rack: TR1, well: A1 }
+  V_hcl:    { rack: TR1, well: A2 }
+  V_naoh:   { rack: TR1, well: A3 }
+  V_enzyme: { rack: TR1, well: B1 }

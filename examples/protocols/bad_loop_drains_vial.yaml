@@ -1,0 +1,11 @@
+# Fails on the 4th iteration: V_hcl holds 200 uL, 4 x 60 = 240.
+version: 1
+name: loop_drains_vial
+steps:
+  - op: repeat
+    times: 4
+    body:
+      - op: transfer
+        from: { vial: V_hcl }
+        to: { plate: P1, well: C1 }
+        volume_ul: 60

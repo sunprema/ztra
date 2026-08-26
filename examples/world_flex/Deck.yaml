@@ -1,0 +1,24 @@
+# Same lab as examples/world, on an Opentrons Flex. Flex slots are A1..D4 and the
+# trash can go anywhere (here A3).
+version: 1
+
+slots:
+  "D1": { entity: P1 }
+  "D2": { entity: TR1 }
+  "D3": { entity: TIPS1 }
+  "A3": { trash: true }
+
+tube_racks:
+  TR1:
+    labware: opentrons_24_tuberack_nest_1.5ml_snapcap
+
+tip_racks:
+  TIPS1:
+    labware: opentrons_flex_96_tiprack_1000ul
+    used: []
+
+linker:
+  V_water:  { rack: TR1, well: A1 }
+  V_hcl:    { rack: TR1, well: A2 }
+  V_naoh:   { rack: TR1, well: A3 }
+  V_enzyme: { rack: TR1, well: B1 }

@@ -1,0 +1,43 @@
+# A small but complete protocol against examples/world: thaw, a loop, a mix, an
+# observation, and a branch on it. Compiles to two predicted outcomes.
+version: 1
+name: demo_fill_and_check
+steps:
+  - op: thaw
+    vial: V_enzyme
+
+  - op: repeat
+    times: 3
+    body:
+      - op: transfer
+        from: { vial: V_water }
+        to: { plate: P1, well: B1 }
+        volume_ul: 50
+
+  - op: transfer
+    from: { vial: V_enzyme }
+    to: { plate: P1, well: B1 }
+    volume_ul: 20
+
+  - op: mix
+    at: { plate: P1, well: B1 }
+    volume_ul: 100
+    repetitions: 5
+
+  - op: observe
+    sensor: scale_1
+    label: after_fill
+
+  - op: if_observed
+    observation: after_fill
+    condition: { metric: mass_mg, cmp: ge, value: 215 }
+    then:
+      - op: transfer
+        from: { plate: P1, well: B1 }
+        to: { plate: P1, well: B2 }
+        volume_ul: 85
+    otherwise:
+      - op: transfer
+        from: { vial: V_water }
+        to: { plate: P1, well: B1 }
+        volume_ul: 30

@@ -1,0 +1,15 @@
+# The U8 protocol, written with for_wells: a 1:10 dilution of the enzyme into A2..E2.
+# `$w` stands for the current well inside the loop. Pair it with a budget such as
+# "sensor=scale_1,every=3" to get a scale check every three transfers.
+version: 1
+name: enzyme_1_to_10_column_2
+steps:
+  - op: thaw
+    vial: V_enzyme
+  - op: for_wells
+    wells: [A2..E2]
+    as: w
+    body:
+      - { op: transfer, from: { vial: V_water },  to: { plate: P1, well: $w }, volume_ul: 180 }
+      - { op: transfer, from: { vial: V_enzyme }, to: { plate: P1, well: $w }, volume_ul: 20 }
+      - { op: mix, at: { plate: P1, well: $w }, volume_ul: 100, repetitions: 3 }

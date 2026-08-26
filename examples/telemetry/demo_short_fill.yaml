@@ -1,0 +1,8 @@
+# What the lab reported while running examples/protocols/demo.yaml on examples/world.
+# The scale read 8 mg light after the fill, so the `after_fill` branch (mass_mg >= 215)
+# does not hold and the protocol took its `otherwise` arm.
+readings:
+  - label: after_fill
+    sensor: scale_1
+    values: { mass_mg: 211.6 }
+notes: "OT-2 run 2026-08-25, scale tared with the empty plate"
