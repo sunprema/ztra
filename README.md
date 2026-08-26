@@ -86,7 +86,7 @@ When the world matches your bench, `ztra store init world` starts the version hi
 
 ## Reading further
 
-The `docs/` folder has the details, starting with [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the overall design and [REQUIREMENTS.md](docs/REQUIREMENTS.md) for what v0.1 is meant to do. [PROTOTYPE_FINDINGS.md](docs/PROTOTYPE_FINDINGS.md) records the experiments that shaped the design — including the mistakes.
+[docs/USER_GUIDE.md](docs/USER_GUIDE.md) walks through every command, grouped by the stage of work it belongs to. Beyond that, the `docs/` folder has the details, starting with [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the overall design and [REQUIREMENTS.md](docs/REQUIREMENTS.md) for what v0.1 is meant to do. [PROTOTYPE_FINDINGS.md](docs/PROTOTYPE_FINDINGS.md) records the experiments that shaped the design — including the mistakes.
 
 ---
 
