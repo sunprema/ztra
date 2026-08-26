@@ -6,7 +6,7 @@ from typing import Any
 
 from ztra.world import Severity, World, validate
 from ztra.world.coords import WellCoord
-from ztra.world.inventory import total_ul
+from ztra.world.inventory import describe_mixture, total_ul
 
 
 def summary(world: World) -> dict[str, Any]:
@@ -18,8 +18,10 @@ def summary(world: World) -> dict[str, Any]:
             tips_free[rid] = d.rows * d.cols - len(rack.used)
     plates = {}
     for pid, plate in world.inventory.plates.items():
-        wells = {w: round(total_ul(c), 3) for w, c in sorted(plate.wells.items(), key=lambda kv: (WellCoord.parse(kv[0]) or WellCoord(99, 99))) if c}
-        plates[pid] = {"labware": plate.labware, "slot": world.deck.slot_of(pid), "filled_wells": len(wells), "wells_ul": wells}
+        filled = [(w, c) for w, c in sorted(plate.wells.items(), key=lambda kv: (WellCoord.parse(kv[0]) or WellCoord(99, 99))) if c]
+        wells = {w: round(total_ul(c), 3) for w, c in filled}
+        mixtures = {w: describe_mixture(c, world.inventory.reagents) for w, c in filled}
+        plates[pid] = {"labware": plate.labware, "slot": world.deck.slot_of(pid), "filled_wells": len(wells), "wells_ul": wells, "mixtures": mixtures}
     return {
         "hash": world.hash(),
         "robot": {"model": world.hardware.robot.model.value, "api_level": world.hardware.robot.api_level},

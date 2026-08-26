@@ -164,7 +164,7 @@ for _topic, _file in TOPICS.items():
 
 @server.tool()
 def world_summary(world_dir: str) -> dict[str, Any]:
-    """What's in the lab: vials and their volumes, filled wells, free tips, sensors, hazards, and any validation problems."""
+    """What's in the lab: vials and their volumes, filled wells with their mixtures and concentrations, free tips, sensors, hazards, and any validation problems."""
     return _run(lambda: summary(_world(world_dir)))
 
 

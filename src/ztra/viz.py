@@ -15,7 +15,7 @@ from ztra.protocol import Protocol
 from ztra.schedule import Budget
 from ztra.world import World
 from ztra.world.coords import WellCoord
-from ztra.world.inventory import ThermalState, total_ul
+from ztra.world.inventory import ThermalState, describe_mixture, total_ul
 
 PALETTE = ["#4C78A8", "#F58518", "#54A24B", "#B279A2", "#E45756", "#72B7B2", "#EECA3B", "#9D755D"]
 VERDICT_COLORS = {Verdict.verified: "#54A24B", Verdict.deviated: "#E45756", Verdict.unobserved: "#C9C9C9"}
@@ -60,7 +60,7 @@ def plate_svg(world: World, plate_id: str) -> str:
             if vol > 0:
                 dominant = max(contents, key=lambda l: l.volume_ul).reagent
                 radius = max(2.5, rmax * min(1.0, (vol / cap) ** 0.5))
-                tip = ", ".join(f"{l.volume_ul:g} uL {html.escape(l.reagent)}" for l in contents)
+                tip = f"{vol:g} uL: " + html.escape(describe_mixture(contents, world.inventory.reagents))
                 parts.append(f'<circle cx="{cx}" cy="{cy}" r="{radius:.1f}" fill="{colors.get(dominant, "#888")}"><title>{name}: {tip}</title></circle>')
     w, h = ox + d.cols * CELL + 4, oy + d.rows * CELL + 4
     return f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'

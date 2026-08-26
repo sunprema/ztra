@@ -27,7 +27,7 @@ The `world/` directory is three YAML files: `Inventory.yaml` (what exists), `Dec
 | Command | What it does |
 |---|---|
 | `ztra world validate <dir>` | Checks that the description makes sense as a lab: no dangling references, no wells off the grid, no two vials in one tube position, a trash slot exists, and so on. Each issue says where it is and how to fix it. Exit 1 if there are errors. |
-| `ztra world summary <dir>` | A compact JSON overview of the lab in one object: robot, pipettes, vials and their volumes, filled wells, tips left, sensors, and any validation problems. Good for a quick "what am I working with?" without reading three YAML files. |
+| `ztra world summary <dir>` | A compact JSON overview of the lab in one object: robot, pipettes, vials and their volumes, filled wells with their mixtures (e.g. `water 90% + enzyme_x 10% (1 U/uL, 1:10)`), tips left, sensors, and any validation problems. Good for a quick "what am I working with?" without reading three YAML files. |
 | `ztra world dump <dir>` | The whole world as canonical JSON, keys sorted. |
 | `ztra world hash <dir>` | The SHA-256 of that canonical form — the fingerprint a snapshot is stored under. Two worlds with the same hash are the same world. |
 

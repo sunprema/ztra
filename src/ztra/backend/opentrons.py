@@ -92,8 +92,10 @@ def _liquids(world: World) -> tuple[list[str], set[tuple[str, str]]]:
         for well, contents in plate.wells.items():
             if not contents:
                 continue
-            dominant = max(contents, key=lambda l: l.volume_ul).reagent
-            loads.append(f'    {_var(pid)}["{well}"].load_liquid({liquid_var(dominant)}, {fmt(total_ul(contents))})')
+            # the vendor API takes one liquid per well, so a mixture is named as one
+            names = sorted({l.reagent for l in contents})
+            label = names[0] if len(names) == 1 else "+".join(names)
+            loads.append(f'    {_var(pid)}["{well}"].load_liquid({liquid_var(label)}, {fmt(total_ul(contents))})')
             declared.add((pid, well))
     for vid, link in world.deck.linker.items():
         vial = world.inventory.vials.get(vid)

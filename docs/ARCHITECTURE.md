@@ -229,8 +229,10 @@ Compares the simulator's expected observations with the telemetry actually recei
 
 - Real σ and latency of the scale/camera we own (sets diff thresholds and the default verification budget).
 - Agent ergonomics of the pessimistic join for `IfObserved`; may need a "declare expected branch" hint.
-- Mixture semantics inside a well (the prototype used "dominant reagent"); concentrations need a proper model.
 - Mapping of SiLA2 instruments onto PIR-L and `OBSERVE`.
+
+Resolved 2026-08-26: mixture semantics — wells track exact composition by volume (volume-additive,
+homogeneous), and labelled stock concentrations dilute by volume fraction. See WORLD_MODEL.md.
 
 ## 9. Build Order for v0.1
 

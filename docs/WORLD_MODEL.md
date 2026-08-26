@@ -29,7 +29,7 @@ version: 1
 reagents:
   <reagent_id>:
     hazard: inert | acid | base | oxidizer | flammable | toxic | biohazard   # CON-3
-    concentration: "1 M"        # optional, free text (not interpreted in v0.1)
+    concentration: "1 M"        # optional, "<number> <unit>" like "1 M" or "10 U/uL" (see the mixture model below)
     msds: "msds/hcl.pdf"        # optional reference
     density_mg_per_ul: 1.0      # optional, default 1.0; used for expected scale readings
 vials:
@@ -46,6 +46,22 @@ plates:
       A1:
         - { reagent: <reagent_id>, volume_ul: 50 }
 ```
+
+### The mixture model
+
+A well holds a list of `{reagent, volume_ul}` entries — its exact composition by volume. The model
+(implemented in `world/inventory.py: composition`, resolved 2026-08-26):
+
+- **Volume-additive**: mixing 180 + 20 µL gives 200 µL; no excess-volume effects.
+- **Homogeneous**: every aspiration draws the components in proportion, so a transfer out of a mixed well
+  carries the mixture, and serial dilutions compound correctly.
+- **Concentration scales with volume fraction**: a reagent whose stock is labelled `10 U/uL` reads
+  `1 U/uL` in a well where it makes up 10% of the volume. The unit is carried through unchanged — there is
+  no unit conversion and no reaction chemistry. `concentration` is `"<number> <unit>"`
+  (`W_CONCENTRATION_FORMAT` warns when it doesn't parse; unparseable stock just reports no concentration).
+- Vials stay single-reagent (`E_MIXTURE_IN_VIAL`); mixtures live in plate wells.
+
+`world summary` reports every filled well like `water 90% + enzyme_x 10% (1 U/uL, 1:10)`.
 
 Incompatible hazard pairs (rejected by the compiler as `E_HAZARD`; warned about here if already recorded):
 `acid × base`, `oxidizer × flammable`.
@@ -161,7 +177,7 @@ world unusable; warnings describe a legal but probably unintended state.
 
 ## Not in v1 (deliberately)
 
-- Concentration semantics and mixture chemistry — `concentration` is free text until the mixture model exists (ARCHITECTURE §8).
+- Reaction chemistry and unit conversion — the mixture model dilutes labelled concentrations by volume fraction and nothing more.
 - Multi-plate sensors, sensor placement geometry.
 - Labware geometry beyond `height_mm` (well depth, offsets) — added when static clearance checks are implemented.
 

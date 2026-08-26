@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from ztra.world.coords import WellCoord
 from ztra.world.hardware import KNOWN_PIPETTES, LabwareDef, LabwareKind, RobotModel, SensorKind
-from ztra.world.inventory import incompatible, total_ul
+from ztra.world.inventory import incompatible, parse_concentration, total_ul
 
 if TYPE_CHECKING:
     from ztra.world import World
@@ -183,6 +183,8 @@ def _inventory(c: _Ctx) -> None:
     for name, r in inv.reagents.items():
         if r.density_mg_per_ul <= 0:
             c.error("W_DENSITY", f, f"reagents.{name}", "density_mg_per_ul must be > 0", "water is 1.0")
+        if r.concentration is not None and parse_concentration(r.concentration) is None:
+            c.warn("W_CONCENTRATION_FORMAT", f, f"reagents.{name}", f"concentration '{r.concentration}' is not '<number> <unit>'", 'write it like "1 M" or "10 U/uL" so dilutions can be computed')
 
     for vid, v in inv.vials.items():
         p = f"vials.{vid}"
