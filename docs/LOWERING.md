@@ -31,7 +31,12 @@ Along the way it:
 - **picks tips** the same way the compiler does (column-major, racks in id order, placed racks only), so the
   tip wells in the vendor code match the predicted world's `tip_racks.used`. Error: `E_TIPS`.
 
-PIR-L ops: `pick_up_tip`, `aspirate`, `dispense`, `mix`, `drop_tip`, `return_tip`, `pause`, `observe`, `delay`. Every op keeps
+PIR-L ops: `pick_up_tip`, `aspirate`, `dispense`, `mix`, `drop_tip`, `return_tip`, `pause`, `observe`, `delay`.
+`aspirate`, `dispense` and `mix` carry the optional motion (`at`, `offset_mm`, `side_mm`, `rate_ul_s`);
+`aspirate`/`dispense` carry `air_gap_ul` (the dispense delivers liquid + air), `dispense` carries `blow_out`.
+The backend emits `well.bottom(z)` / `well.top(z)` with `.move(types.Point(x=side, …))`, an absolute
+flow-rate set-and-restore around the command, `air_gap()` after the aspirate and `blow_out()` after the
+dispense. Every op keeps
 its `origin` (protocol step and loop iteration), and the backend writes it as a comment above the code.
 
 ## 2. Segments

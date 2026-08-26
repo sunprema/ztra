@@ -76,9 +76,11 @@ class LabwareKind(str, Enum):
 
 
 class LabwareDef(Strict):
-    """Just enough about a piece of labware to check grids and volumes."""
+    """Just enough about a piece of labware to check grids, volumes and where a tip may go."""
 
     kind: LabwareKind
+    well_depth_mm: float | None = None  # from the vendor definition; bounds offsets from top and bottom
+    well_diameter_mm: float | None = None  # the narrower side for a rectangular well; bounds sideways offsets
     rows: int
     cols: int
     well_max_ul: float | None = None
@@ -132,21 +134,23 @@ class Hardware(Strict):
     sensors: dict[str, Sensor] = Field(default_factory=dict)
     safe_envelope: SafeEnvelope = Field(default_factory=SafeEnvelope)
 
-    def pipette_for(self, volume_ul: float, allow_split: bool) -> tuple[Pipette, int] | None:
+    def pipette_for(self, volume_ul: float, allow_split: bool, reserve_ul: float = 0.0) -> tuple[Pipette, int] | None:
         """Pick the smallest pipette that fits the volume. If nothing is big enough and
-        splitting is allowed, use the largest one over several cycles. None if no pipette can do it."""
+        splitting is allowed, use the largest one over several cycles. None if no pipette can do it.
+        `reserve_ul` is room kept free in the tip on every cycle (an air gap)."""
         eps = 1e-9
         if not (volume_ul > 0) or volume_ul == float("inf"):
             return None
         by_size = sorted(self.pipettes, key=lambda p: p.max_ul)
         for p in by_size:
-            if p.min_ul <= volume_ul + eps and volume_ul <= p.max_ul + eps:
+            if p.min_ul <= volume_ul + eps and volume_ul <= p.max_ul - reserve_ul + eps:
                 return p, 1
         if not by_size:
             return None
         largest = by_size[-1]
-        if allow_split and volume_ul > largest.max_ul:
-            return largest, -(-int(volume_ul * 1e6) // int(largest.max_ul * 1e6))
+        room = largest.max_ul - reserve_ul
+        if allow_split and room > 0 and volume_ul > room:
+            return largest, -(-int(volume_ul * 1e6) // int(room * 1e6))
         return None
 
     def pipette_ranges(self) -> str:

@@ -115,6 +115,10 @@ def _hardware(c: _Ctx) -> None:
             c.error("W_LABWARE_GRID", f, p, "rows and cols must be >= 1", "check the labware definition")
         if d.height_mm <= 0:
             c.error("W_LABWARE_HEIGHT", f, p, "height_mm must be > 0", "needed for deck clearance checks")
+        if d.well_depth_mm is not None and d.well_depth_mm <= 0:
+            c.error("W_LABWARE_GEOMETRY", f, p, "well_depth_mm must be > 0", "take it from the vendor definition")
+        if d.well_diameter_mm is not None and d.well_diameter_mm <= 0:
+            c.error("W_LABWARE_GEOMETRY", f, p, "well_diameter_mm must be > 0", "take it from the vendor definition")
         if d.kind in (LabwareKind.plate, LabwareKind.reservoir, LabwareKind.tube_rack) and not (d.well_max_ul is not None and d.well_max_ul > 0):
             c.error("W_LABWARE_CAPACITY", f, p, "plates, reservoirs and tube racks need well_max_ul > 0", "add well_max_ul")
         if d.kind is LabwareKind.tip_rack and not (d.tip_volume_ul is not None and d.tip_volume_ul > 0):

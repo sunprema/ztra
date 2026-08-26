@@ -30,7 +30,7 @@ def emit_segment(world: World, program: Program, index: int, seg: Segment) -> st
         lines.append(f"# ends: runtime decides on '{n.observation}' ({n.condition}) -> segment {n.then} if true, segment {n.otherwise} if false")
     else:
         lines.append("# ends: halt")
-    lines += ["", 'metadata = {"protocolName": "ztra segment %d"}' % index, f'requirements = {{"robotType": "{robot}", "apiLevel": "{api}"}}', "", "", "def run(ctx):"]
+    lines += ["", "from opentrons import types", "", 'metadata = {"protocolName": "ztra segment %d"}' % index, f'requirements = {{"robotType": "{robot}", "apiLevel": "{api}"}}', "", "", "def run(ctx):"]
 
     # Load everything that sits in a slot.
     for slot, content in sorted(world.deck.slots.items(), key=lambda kv: _slot_order(kv[0])):
@@ -59,11 +59,19 @@ def emit_segment(world: World, program: Program, index: int, seg: Segment) -> st
         if isinstance(op, PickUpTip):
             lines.append(f'    {_pip(op.pipette)}.pick_up_tip({_var(op.rack)}["{op.well}"])')
         elif isinstance(op, Aspirate):
-            lines.append(f'    {_pip(op.pipette)}.aspirate({fmt(op.volume_ul)}, {_var(op.labware)}["{op.well}"])')
+            pn = _pip(op.pipette)
+            lines += _with_rate(pn, "aspirate", op.rate_ul_s, [f'    {pn}.aspirate({fmt(op.volume_ul)}, {_where(op.labware, op.well, op.at, op.offset_mm, op.side_mm)})'])
+            if op.air_gap_ul > 0:
+                lines.append(f"    {pn}.air_gap({fmt(op.air_gap_ul)})")
         elif isinstance(op, Dispense):
-            lines.append(f'    {_pip(op.pipette)}.dispense({fmt(op.volume_ul)}, {_var(op.labware)}["{op.well}"])')
+            pn = _pip(op.pipette)
+            lines += _with_rate(pn, "dispense", op.rate_ul_s, [f'    {pn}.dispense({fmt(op.volume_ul + op.air_gap_ul)}, {_where(op.labware, op.well, op.at, op.offset_mm, op.side_mm)})'])
+            if op.blow_out:
+                lines.append(f"    {pn}.blow_out()")
         elif isinstance(op, MixOp):
-            lines.append(f'    {_pip(op.pipette)}.mix({op.repetitions}, {fmt(op.volume_ul)}, {_var(op.labware)}["{op.well}"])')
+            pn = _pip(op.pipette)
+            body = [f'    {pn}.mix({op.repetitions}, {fmt(op.volume_ul)}, {_where(op.labware, op.well, op.at, op.offset_mm, op.side_mm)})']
+            lines += _with_rate(pn, "aspirate", op.rate_ul_s, _with_rate(pn, "dispense", op.rate_ul_s, body))
         elif isinstance(op, DropTip):
             lines.append(f"    {_pip(op.pipette)}.drop_tip()")
         elif isinstance(op, ReturnTip):
@@ -137,6 +145,26 @@ def _api_at_least(api: str, minimum: tuple[int, int]) -> bool:
     if len(parts) != 2 or not all(p.isdigit() for p in parts):
         return False
     return (int(parts[0]), int(parts[1])) >= minimum
+
+
+def _where(labware: str, well: str, at: str | None, offset_mm: float | None, side_mm: float) -> str:
+    """The well, or a point in it: `P1["A1"].bottom(0.5).move(types.Point(x=-1, y=0, z=0))`."""
+    loc = f'{_var(labware)}["{well}"]'
+    if at is None and offset_mm is None and side_mm == 0:
+        return loc
+    ref = at or "bottom"
+    z = offset_mm if offset_mm is not None else (1.0 if ref == "bottom" else -1.0)
+    loc = f"{loc}.{ref}({fmt(z)})"
+    if side_mm != 0:
+        loc = f"{loc}.move(types.Point(x={fmt(side_mm)}, y=0, z=0))"
+    return loc
+
+
+def _with_rate(pipette: str, what: str, rate_ul_s: float | None, body: list[str]) -> list[str]:
+    """Wrap a command in an absolute flow-rate change and restore the pipette's own afterwards."""
+    if rate_ul_s is None:
+        return body
+    return [f"    _{what}_rate = {pipette}.flow_rate.{what}", f"    {pipette}.flow_rate.{what} = {fmt(rate_ul_s)}", *body, f"    {pipette}.flow_rate.{what} = _{what}_rate"]
 
 
 def _labware_name(world: World, entity: str) -> str:

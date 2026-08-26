@@ -265,9 +265,11 @@ def describe_op(world: World, op: PirL) -> str:
     if isinstance(op, PickUpTip):
         return f"pick up tip {op.well} from {op.rack}"
     if isinstance(op, Aspirate):
-        return f"aspirate {op.volume_ul:g} uL from {place(op.labware, op.well)}"
+        gap = f" + {op.air_gap_ul:g} uL air" if op.air_gap_ul else ""
+        return f"aspirate {op.volume_ul:g} uL from {place(op.labware, op.well)}{_how(op.at, op.offset_mm, op.side_mm, op.rate_ul_s)}{gap}"
     if isinstance(op, Dispense):
-        return f"dispense {op.volume_ul:g} uL into {place(op.labware, op.well)}"
+        blow = ", blow out" if op.blow_out else ""
+        return f"dispense {op.volume_ul:g} uL into {place(op.labware, op.well)}{_how(op.at, op.offset_mm, op.side_mm, op.rate_ul_s)}{blow}"
     if isinstance(op, MixOp):
         return f"mix {op.repetitions} x {op.volume_ul:g} uL at {place(op.labware, op.well)}"
     if isinstance(op, DropTip):
@@ -281,6 +283,17 @@ def describe_op(world: World, op: PirL) -> str:
     if isinstance(op, Delay):
         return f"wait {op.seconds:g} s"
     return op.op
+
+
+def _how(at: str | None, offset_mm: float | None, side_mm: float, rate_ul_s: float | None) -> str:
+    bits = []
+    if at is not None or offset_mm is not None:
+        bits.append(f"{offset_mm if offset_mm is not None else 1:g} mm from the {at or 'bottom'}")
+    if side_mm:
+        bits.append(f"{side_mm:+g} mm sideways")
+    if rate_ul_s is not None:
+        bits.append(f"{rate_ul_s:g} uL/s")
+    return f" ({', '.join(bits)})" if bits else ""
 
 
 def trace(world: World, protocol: Protocol, budget: Budget | None = None, decisions: list[bool] | None = None) -> list[Frame]:

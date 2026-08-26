@@ -41,10 +41,13 @@ workflow that needs them all. Sizes: S = a day or less, M = days, L = a week-sca
    one-source rule `E_TIP_CONTAMINATION`, and `replenish_tips` — the human's rack swap as an explicit,
    compiler-verified step that lowers to a pause plus `reset_tipracks()`. The vendor engine accepts both
    the return-and-re-pick and the swap (PROTOCOL.md).
-5. **Position and flow control, with labware geometry (M).** Supernatant removal aspirates offset
-   *sideways* from the bead pellet (`bottom().move(Point(x=side))`) at reduced flow rate, dispenses at
-   `well.top(-3)`, uses 10 µL air gaps and `blow_out()`. PIR-L ops carry only (labware, well, volume);
-   the catalog lacks well diameter/depth. Adds optional op parameters and geometry fields.
+5. **Position and flow control, with labware geometry (M) — done 2026-08-26.** Supernatant removal
+   aspirates offset *sideways* from the bead pellet at reduced flow rate, dispenses at `well.top(-3)`, uses
+   10 µL air gaps and `blow_out()`. Now optional `aspirate:` / `dispense:` / `position:` motions on
+   transfer and mix (`at`, `offset_mm`, `side_mm`, `rate_ul_s`, `blow_out`) plus `air_gap_ul`, checked
+   against `well_depth_mm` / `well_diameter_mm` in the catalog (`E_POSITION`) and the safe envelope
+   (`E_FLOW_RATE`). The vendor engine subtracts the air gap when tracking liquid, so the vendor-sim
+   cross-check stays exact (OPENTRONS_NOTES.md).
 6. **The magnetic module (M).** `magdeck.engage(height)` / `disengage()` plus a module occupying a slot
    under a plate. First module in the world model and PIR-L; with 3 and 5 it makes bead cleanup —
    arguably the most automated workflow in the field (NGS prep, extractions) — expressible.

@@ -26,11 +26,15 @@ steps:
     from: { vial: V_water }                 # a Loc: { vial: id } or { plate: id, well: A1 }; reservoirs are addressed as plates
     to:   { plate: P1, well: B1 }
     volume_ul: 50                           # one fresh tip per transfer
+    aspirate: { at: bottom, offset_mm: 0.5, side_mm: -1, rate_ul_s: 20 }   # optional: where in the well, how fast
+    dispense: { at: top, offset_mm: -3, blow_out: true }                    # optional; `at` bottom|top, offset up (+) / down (−)
+    air_gap_ul: 10                          # optional: air drawn after the liquid so nothing drips
 
   - op: mix
     at: { plate: P1, well: B1 }
     volume_ul: 100
     repetitions: 5                          # default 3; one fresh tip
+    position: { at: bottom, offset_mm: 2, rate_ul_s: 150 }   # optional, same shape as aspirate/dispense
 
   - op: delay                               # wait: an incubation, beads settling
     minutes: 3                              # seconds and minutes add up; must be > 0
@@ -85,6 +89,11 @@ Unknown fields and unknown `op`s are rejected at load.
 - Branching multiplies the number of paths the compiler must check; more than **64 paths** (`MAX_PATHS`)
   is `E_TOO_MANY_PATHS`.
 - Vials hold a single reagent; mixtures live in plate wells (`E_MIXTURE_IN_VIAL`).
+- **Motion.** Left out, the vendor defaults apply (1 mm above the well bottom, the pipette's own speed). Given,
+  a position must stay inside the well — bounded by `well_depth_mm` / `well_diameter_mm` from the labware
+  catalog when they are known (`E_POSITION`) — and a flow rate inside `safe_envelope.max_flow_rate_ul_s`
+  (`E_FLOW_RATE`). An air gap rides in the tip with the liquid, so it takes room: transfers split into more
+  cycles, and a gap as big as the pipette is `E_PIPETTE_RANGE`.
 - **Tips.** Outside a `with_tip`, every transfer and mix takes a fresh tip. Inside one, the first step picks a
   tip up and the rest reuse it; a tip may only ever draw from **one location** (`E_TIP_CONTAMINATION`) and fits
   one pipette (`E_TIP_PIPETTE`). A *named* tip goes back to its rack position at the end of the block and is
@@ -168,6 +177,8 @@ must match (`E_PROTOCOL_VERSION`).
 | `E_MIXTURE_IN_VIAL` | a second reagent into a vial |
 | `E_WASTE_SOURCE` | aspirating or mixing in a waste reservoir; what went in is gone |
 | `E_DELAY` | a delay must last a positive time |
+| `E_POSITION` | an aspirate/dispense/mix position would leave the well (offset beyond its depth, sideways beyond its radius, wrong sign) |
+| `E_FLOW_RATE` | a flow rate is not positive or exceeds `safe_envelope.max_flow_rate_ul_s` |
 | `E_TIP_SCOPE` | `with_tip` blocks do not nest; no rack swap inside one |
 | `E_TIP_PIPETTE` | every step under one `with_tip` must use the same pipette |
 | `E_TIP_CONTAMINATION` | a shared or named tip may only ever draw from one location |

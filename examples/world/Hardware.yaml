@@ -23,24 +23,32 @@ labware:
     cols: 12
     well_max_ul: 360
     height_mm: 14.2
+    well_depth_mm: 10.67
+    well_diameter_mm: 6.86
   opentrons_24_tuberack_nest_1.5ml_snapcap:
     kind: tube_rack
     rows: 4
     cols: 6
     well_max_ul: 1500
     height_mm: 43.0
+    well_depth_mm: 37.9
+    well_diameter_mm: 10.2
   nest_12_reservoir_15ml:
     kind: reservoir
     rows: 1
     cols: 12
     well_max_ul: 15000
     height_mm: 31.4
+    well_depth_mm: 26.85
+    well_diameter_mm: 8.2
   nest_1_reservoir_195ml:
     kind: reservoir
     rows: 1
     cols: 1
     well_max_ul: 195000
     height_mm: 31.4
+    well_depth_mm: 25.0
+    well_diameter_mm: 71.2
   opentrons_96_tiprack_300ul:
     kind: tip_rack
     rows: 8

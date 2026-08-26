@@ -118,6 +118,8 @@ pipettes:
 labware:                        # the catalog; CON-2 comes from well_max_ul
   <labware_id>:
     kind: plate | reservoir | tube_rack | tip_rack   # reservoir: a trough of any grid (1x1, 1x12)
+    well_depth_mm: 10.67        # optional, from the vendor definition (wells[A1].depth); bounds tip offsets
+    well_diameter_mm: 6.86      # optional; the narrower side of a rectangular well; bounds sideways offsets
     rows: 8
     cols: 12
     well_max_ul: 360            # required for plate / tube_rack
@@ -157,6 +159,7 @@ world unusable; warnings describe a legal but probably unintended state.
 | `W_LABWARE_KIND` | E | labware kind does not match its role |
 | `W_LABWARE_GRID` / `W_LABWARE_HEIGHT` / `W_LABWARE_CAPACITY` / `W_LABWARE_TIP_VOLUME` | E | malformed labware definition |
 | `W_PLATE_NOT_96` | E | a `kind: plate` is not 8×12 (CON-1); reservoirs may have any grid |
+| `W_LABWARE_GEOMETRY` | E | `well_depth_mm` / `well_diameter_mm` given but not > 0 |
 | `W_WASTE_NOT_RESERVOIR` | W | `waste: true` on something other than a reservoir |
 | `W_WELL_INVALID` | E | well name outside the labware grid |
 | `W_WELL_OVERFLOW` | E | recorded contents exceed `well_max_ul` (CON-2) |

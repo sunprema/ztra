@@ -22,6 +22,7 @@ from ztra.protocol import (
     IfObserved,
     Loc,
     Mix,
+    Motion,
     Observe,
     Protocol,
     Repeat,
@@ -38,7 +39,7 @@ from ztra.protocol import (
 from ztra.world.coords import expand_wells
 from ztra.world import Severity, World, validate
 from ztra.world.coords import WellCoord
-from ztra.world.hardware import Pipette
+from ztra.world.hardware import LabwareDef, Pipette
 from ztra.world.inventory import Liquid, ThermalState, incompatible, total_ul
 
 MAX_PATHS = 64  # hard cap on branch paths (each branch doubles them) so compile time stays bounded
@@ -212,10 +213,10 @@ class _Unroller:
             elif isinstance(step, Transfer):
                 src, dst = self.bind(step.from_, origin), self.bind(step.to, origin)
                 vol = self.volume(step.volume_ul, origin)
-                out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=src, volume_ul=vol)], outputs=[Port(loc=dst, volume_ul=vol)], tip_name=self.tip_scope, origin=origin))
+                out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=src, volume_ul=vol)], outputs=[Port(loc=dst, volume_ul=vol)], tip_name=self.tip_scope, aspirate=step.aspirate, dispense=step.dispense, air_gap_ul=step.air_gap_ul, origin=origin))
             elif isinstance(step, Mix):
                 port = Port(loc=self.bind(step.at, origin), volume_ul=self.volume(step.volume_ul, origin))
-                out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, tip_name=self.tip_scope, origin=origin))
+                out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, tip_name=self.tip_scope, position=step.position, origin=origin))
             elif isinstance(step, WithTip):
                 if self.tip_scope is not None:
                     raise CompileError("E_TIP_SCOPE", "a pipette holds one tip; with_tip does not nest", f"with_tip {step.name or ''}".strip(), "no enclosing with_tip", f"inside with_tip {self.tip_scope}", "close the outer with_tip first", origin=origin)
@@ -368,7 +369,11 @@ class _Checker:
             st.trace.append(f"thaw {loc.vial}: {was} -> thawed, freeze_thaw_cycles={vial.freeze_thaw_cycles}")
         elif op.kind is TransformKind.transfer:
             src, dst, vol = op.inputs[0].loc, op.outputs[0].loc, op.inputs[0].volume_ul
-            pipette, cycles = self.choose_pipette(st, origin, vol, allow_split=True)
+            if op.air_gap_ul < 0:
+                raise self.err(st, "E_PIPETTE_RANGE", origin, "an air gap is a volume of air", "air_gap_ul", ">= 0 uL", f"{fmt(op.air_gap_ul)} uL", "drop the minus sign")
+            pipette, cycles = self.choose_pipette(st, origin, vol, allow_split=True, reserve=op.air_gap_ul)
+            self.check_motion(st, origin, src, op.aspirate, "aspirate")
+            self.check_motion(st, origin, dst, op.dispense, "dispense")
             taken = self.take(st, origin, src, vol)
             self.check_destination(st, origin, dst, taken.liquids, vol)
             tip, changed = self.use_tip(st, origin, pipette, op.tip_name, src)
@@ -410,6 +415,7 @@ class _Checker:
         else:
             at, vol = op.inputs[0].loc, op.inputs[0].volume_ul
             pipette, _ = self.choose_pipette(st, origin, vol, allow_split=False)
+            self.check_motion(st, origin, at, op.position, "mix")
             self.take(st, origin, at, vol)  # checks presence and volume; nothing moves
             tip, changed = self.use_tip(st, origin, pipette, op.tip_name, at)
             reps = op.repetitions or 1
@@ -437,15 +443,47 @@ class _Checker:
             raise self.err(st, "E_TIP_CONTAMINATION", origin, "a shared tip may only ever draw from one location, or it carries liquid between sources", name, f"drawing from {rec.source}", f"drawing from {where}", "use a fresh tip (a separate with_tip, or none) for each source")
         return f"{rec.rack}:{rec.well} ({name}, kept)", False
 
-    def choose_pipette(self, st: _PathState, origin: Origin, vol: float, allow_split: bool) -> tuple[Pipette, int]:
+    def choose_pipette(self, st: _PathState, origin: Origin, vol: float, allow_split: bool, reserve: float = 0.0) -> tuple[Pipette, int]:
         if not (vol > 0) or vol == float("inf"):
             raise self.err(st, "E_PIPETTE_RANGE", origin, "a volume must be positive", "volume", "> 0 uL", f"{vol} uL", "fix the volume")
-        found = self.base.hardware.pipette_for(vol, allow_split)
+        found = self.base.hardware.pipette_for(vol, allow_split, reserve)
         if found is not None:
             return found[0], found[1]
         ranges = self.base.hardware.pipette_ranges() or "at least one pipette"
+        if reserve > 0 and self.base.hardware.pipette_for(vol, allow_split) is not None:
+            raise self.err(st, "E_PIPETTE_RANGE", origin, "the air gap rides in the tip with the liquid, so it needs room", "air_gap_ul", "less than the pipette's maximum", f"{fmt(reserve)} uL", "use a smaller air gap")
         hint = "use a volume >= the smallest pipette minimum" if allow_split else "mix volumes cannot be split; use a volume within one pipette's range"
         raise self.err(st, "E_PIPETTE_RANGE", origin, "a volume must lie within some pipette's range", "pipettes", ranges, f"{fmt(vol)} uL", hint)
+
+    def check_motion(self, st: _PathState, origin: Origin, loc: Loc, m: Motion | None, what: str) -> None:
+        """A position must stay inside the well and a flow rate inside the safe envelope."""
+        if m is None:
+            return
+        if m.rate_ul_s is not None:
+            limit = self.base.hardware.safe_envelope.max_flow_rate_ul_s
+            if m.rate_ul_s <= 0 or (limit is not None and m.rate_ul_s > limit):
+                raise self.err(st, "E_FLOW_RATE", origin, "a flow rate must be positive and within the safe envelope", f"{what}.rate_ul_s", f"0 < rate <= {fmt(limit)} uL/s" if limit is not None else "> 0 uL/s", f"{fmt(m.rate_ul_s)} uL/s", "lower the rate, or raise Hardware.safe_envelope.max_flow_rate_ul_s")
+        d = self.labware_at(loc)
+        if d is None:
+            return
+        z = m.offset_mm if m.offset_mm is not None else (1.0 if m.at == "bottom" else -1.0)
+        depth = d.well_depth_mm
+        where = f"{what} at {loc_str(loc)}"
+        if m.at == "bottom" and (z < 0 or (depth is not None and z > depth)):
+            raise self.err(st, "E_POSITION", origin, "the tip must stay inside the well", where, f"0 <= offset <= {fmt(depth)} mm above the bottom" if depth is not None else ">= 0 mm above the bottom", f"{fmt(z)} mm", "keep the offset between the well bottom and its top")
+        if m.at == "top" and (z > 0 or (depth is not None and -z > depth)):
+            raise self.err(st, "E_POSITION", origin, "the tip must stay inside the well", where, f"-{fmt(depth)} <= offset <= 0 mm from the top" if depth is not None else "<= 0 mm from the top", f"{fmt(z)} mm", "keep the offset between the well top and its bottom")
+        if d.well_diameter_mm is not None and abs(m.side_mm) > d.well_diameter_mm / 2:
+            raise self.err(st, "E_POSITION", origin, "the tip must stay inside the well", where, f"|side| <= {fmt(d.well_diameter_mm / 2)} mm", f"{fmt(m.side_mm)} mm", "the well is narrower than that")
+
+    def labware_at(self, loc: Loc) -> LabwareDef | None:
+        w = self.base
+        if isinstance(loc, WellLoc):
+            p = w.inventory.plates.get(loc.plate)
+            return w.hardware.labware.get(p.labware) if p else None
+        link = w.deck.linker.get(loc.vial)
+        rack = w.deck.tube_racks.get(link.rack) if link else None
+        return w.hardware.labware.get(rack.labware) if rack else None
 
     def take(self, st: _PathState, origin: Origin, loc: Loc, vol: float) -> _Taken:
         """Check that this much can be drawn from here, and say what would come out."""

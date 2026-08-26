@@ -17,7 +17,7 @@ from pydantic import Field
 from ztra.compiler_errors import CompileError
 from ztra.model import Strict
 from ztra.pir import Branch, ObserveOp, Origin, PirH, Transform, TransformKind
-from ztra.protocol import Condition, Loc, VialLoc, loc_str
+from ztra.protocol import Condition, Loc, Motion, VialLoc, loc_str
 from ztra.world import World
 from ztra.world.deck import Deck
 from ztra.world.hardware import Pipette
@@ -37,6 +37,11 @@ class Aspirate(Strict):
     labware: str
     well: str
     volume_ul: float
+    at: Literal["bottom", "top"] | None = None  # where in the well; None = vendor default
+    offset_mm: float | None = None
+    side_mm: float = 0.0
+    rate_ul_s: float | None = None
+    air_gap_ul: float = 0.0  # drawn after the liquid
     origin: Origin
 
 
@@ -45,7 +50,13 @@ class Dispense(Strict):
     pipette: str
     labware: str
     well: str
-    volume_ul: float
+    volume_ul: float  # liquid only; the air gap that rides with it is listed separately
+    at: Literal["bottom", "top"] | None = None
+    offset_mm: float | None = None
+    side_mm: float = 0.0
+    rate_ul_s: float | None = None
+    air_gap_ul: float = 0.0
+    blow_out: bool = False
     origin: Origin
 
 
@@ -56,6 +67,10 @@ class MixOp(Strict):
     well: str
     volume_ul: float
     repetitions: int
+    at: Literal["bottom", "top"] | None = None
+    offset_mm: float | None = None
+    side_mm: float = 0.0
+    rate_ul_s: float | None = None
     origin: Origin
 
 
@@ -149,6 +164,13 @@ class Program(Strict):
         return self.model_dump(mode="json", exclude_none=True)
 
 
+def _motion(m: Motion | None) -> dict[str, Any]:
+    """The position/rate fields of a PIR-L op from a protocol Motion, if there is one."""
+    if m is None:
+        return {}
+    return {"at": m.at, "offset_mm": m.offset_mm, "side_mm": m.side_mm, "rate_ul_s": m.rate_ul_s}
+
+
 def lower(world: World, pir: list[PirH]) -> Program:
     l = _Lowerer(world)
     l.build(_Path(world.deck.model_copy(deep=True)), pir, [])
@@ -230,14 +252,15 @@ class _Lowerer:
             path.named = {n: rw for n, rw in path.named.items() if rw[0] != rack}
         elif op.kind is TransformKind.transfer:
             vol = op.inputs[0].volume_ul
-            pip, cycles = self.pipette(vol, True, o)
+            pip, cycles = self.pipette(vol, True, o, op.air_gap_ul)
             src_lw, src_well = self.address(op.inputs[0].loc, o)
             dst_lw, dst_well = self.address(op.outputs[0].loc, o)
             self.pick_up(path, pip, o, out)
             per = vol / cycles
+            a, d = op.aspirate, op.dispense
             for _ in range(cycles):
-                out.append(Aspirate(pipette=pip.name, labware=src_lw, well=src_well, volume_ul=per, origin=o))
-                out.append(Dispense(pipette=pip.name, labware=dst_lw, well=dst_well, volume_ul=per, origin=o))
+                out.append(Aspirate(pipette=pip.name, labware=src_lw, well=src_well, volume_ul=per, air_gap_ul=op.air_gap_ul, origin=o, **_motion(a)))
+                out.append(Dispense(pipette=pip.name, labware=dst_lw, well=dst_well, volume_ul=per, air_gap_ul=op.air_gap_ul, blow_out=bool(d and d.blow_out), origin=o, **_motion(d)))
             if path.scope is None:
                 out.append(DropTip(pipette=pip.name, origin=o))
         else:
@@ -245,7 +268,7 @@ class _Lowerer:
             pip, _ = self.pipette(vol, False, o)
             lw, well = self.address(op.inputs[0].loc, o)
             self.pick_up(path, pip, o, out)
-            out.append(MixOp(pipette=pip.name, labware=lw, well=well, volume_ul=vol, repetitions=op.repetitions or 1, origin=o))
+            out.append(MixOp(pipette=pip.name, labware=lw, well=well, volume_ul=vol, repetitions=op.repetitions or 1, origin=o, **_motion(op.position)))
             if path.scope is None:
                 out.append(DropTip(pipette=pip.name, origin=o))
 
@@ -264,8 +287,8 @@ class _Lowerer:
         path.held = (pip.name, rack, well)
         out.append(PickUpTip(pipette=pip.name, rack=rack, well=well, origin=origin))
 
-    def pipette(self, vol: float, allow_split: bool, origin: Origin) -> tuple[Pipette, int]:
-        found = self.world.hardware.pipette_for(vol, allow_split)
+    def pipette(self, vol: float, allow_split: bool, origin: Origin, reserve: float = 0.0) -> tuple[Pipette, int]:
+        found = self.world.hardware.pipette_for(vol, allow_split, reserve)
         if found is None:
             raise self.err("E_PIPETTE_RANGE", origin, "a volume must lie within some pipette's range", "pipettes", self.world.hardware.pipette_ranges(), f"{vol} uL", "change the volume or add a pipette")
         return found

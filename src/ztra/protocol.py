@@ -55,6 +55,17 @@ class Thaw(Strict):
     vial: str
 
 
+class Motion(Strict):
+    """Where in the well the tip goes and how fast the liquid moves. Left out, the
+    vendor defaults apply (1 mm above the bottom, the pipette's standard speed)."""
+
+    at: Literal["bottom", "top"] = "bottom"  # the reference point
+    offset_mm: float | None = None  # up (+) or down (−) from it; default 1 from the bottom, −1 from the top
+    side_mm: float = 0.0  # sideways, e.g. away from a bead pellet
+    rate_ul_s: float | None = None  # flow rate; gentle for supernatant, fast for mixing
+    blow_out: bool = False  # dispense only: push the last of it out with air
+
+
 class Transfer(Strict):
     """Move liquid from one place to another, with a fresh tip."""
 
@@ -62,6 +73,9 @@ class Transfer(Strict):
     from_: Loc = Field(alias="from")
     to: Loc
     volume_ul: float | str  # a number, or `$item.column` inside a for_each
+    aspirate: Motion | None = None
+    dispense: Motion | None = None
+    air_gap_ul: float = 0.0  # air drawn after the liquid so nothing drips on the way
 
 
 class Mix(Strict):
@@ -71,6 +85,7 @@ class Mix(Strict):
     at: Loc
     volume_ul: float | str
     repetitions: int = 3
+    position: Motion | None = None
 
 
 class Delay(Strict):

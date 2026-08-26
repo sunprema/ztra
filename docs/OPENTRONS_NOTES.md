@@ -117,6 +117,19 @@ driver requires ≥ 2.22 (`D_API_LEVEL` otherwise). The harness monkeypatches `c
 mid-run, which the vendor engine tolerates. Value confirmed: a second, vendor-written model of what a healthy
 run does; ideal pipettes, so it complements the `FakeDriver` (noise, faults) rather than replacing it.
 
+## Motion and air gaps — probed 2026-08-26 (opentrons 8.8.2, apiLevel 2.22)
+
+- `well.bottom(z)`, `well.top(z)` and `.move(types.Point(x, y, z))` position a command; `flow_rate.aspirate`
+  / `.dispense` are absolute µL/s (p300 gen2 default 92.86) — the `rate=` argument on a command is a multiplier,
+  so the backend sets and restores the absolute value instead.
+- `air_gap(v)` after an aspirate: `current_volume` becomes liquid + air, the dispense must deliver both
+  (≥ 2.17 refuses dispensing more than the tip holds), and **liquid tracking subtracts the air**: after
+  `aspirate(100)`, `air_gap(10)`, `dispense(110)` the destination reads 100 µL. So the vendor-sim driver's
+  volume comparison needs no correction.
+- Well geometry comes from `opentrons_shared_data.labware.load_definition(name, 1)["wells"]["A1"]`:
+  `depth`, and `diameter` (circular) or `xDimension`/`yDimension` (rectangular) — the catalog's
+  `well_depth_mm` / `well_diameter_mm`.
+
 ## What real protocols need
 
 The vendor's community Cookbook was reviewed 2026-08-26 as evidence of what working protocols actually

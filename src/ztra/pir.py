@@ -10,7 +10,7 @@ from typing import Annotated, Literal, Union
 from pydantic import Field
 
 from ztra.model import Strict
-from ztra.protocol import Condition, Loc
+from ztra.protocol import Condition, Loc, Motion
 
 
 class Origin(Strict):
@@ -46,6 +46,10 @@ class Transform(Strict):
     tip_name: str | None = None  # transfer/mix inside a with_tip: use that tip instead of a fresh one
     tip_action: Literal["pick", "drop", "return"] | None = None  # tip only
     rack: str | None = None  # replenish only
+    aspirate: Motion | None = None  # transfer: how to draw
+    dispense: Motion | None = None  # transfer: how to deliver
+    air_gap_ul: float = 0.0  # transfer
+    position: Motion | None = None  # mix
     origin: Origin
 
 
