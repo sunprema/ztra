@@ -2,7 +2,8 @@
 
 The World Model is the versioned Source of Truth for the physical environment (FR-1.1). It is three YAML
 files in one directory; the pydantic models in `src/ztra/world/` are the schema and the YAML is their
-serialized form. Unknown fields are rejected on load. A complete, valid example lives in [`examples/world/`](../examples/world/).
+serialized form. Unknown fields are rejected on load. A complete, valid example lives in [`examples/world/`](../examples/world/),
+and `ztra init <dir>` scaffolds a commented starter world to edit.
 
 ```
 ztra world validate <dir>   # semantic checks → JSON issues (exit 1 on errors, 2 on load failure)

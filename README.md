@@ -52,6 +52,38 @@ ztra compile examples/world examples/protocols/bad_loop_drains_vial.yaml
 
 `ztra --help` shows the rest: `preflight` (do we have enough stock?), `simulate`, `store` (the version history), `run`, and `diff`. There is also an MCP server (`ztra-mcp`) that exposes the whole loop as tools, so agents like Claude can drive it directly.
 
+## Starting your own experiment
+
+You don't have to write the lab description from scratch. Like `git init` or `cargo new`:
+
+```bash
+ztra init my_experiment
+```
+
+This creates a small project that already works, so you edit running files instead of facing a blank page:
+
+```
+my_experiment/
+  world/                  the description of your lab
+    Inventory.yaml          what exists — reagents, vials, plates and their contents
+    Deck.yaml               where it is — which robot slot everything sits in, and
+                            which tube-rack position holds each vial
+    Hardware.yaml           what can act and observe — the robot, its pipettes,
+                            labware dimensions, and your sensors
+  protocols/
+    first_protocol.yaml   a small dilution that compiles against that world
+```
+
+The generated files are commented line by line, and every field is documented with examples in [docs/WORLD_MODEL.md](docs/WORLD_MODEL.md). The workflow from there: describe your actual bench in the three world files, then check your work.
+
+```bash
+ztra world validate world
+```
+
+Your YAML is checked in two layers. First, loading is strict: a misspelled field, a missing one, or an extra one you invented is rejected immediately, rather than silently ignored. Then validation checks that the description makes sense as a lab: a vial pointing at a reagent you never defined, a well that doesn't exist on a 96-well plate, two vials assigned to the same tube-rack position, a deck with no trash, a recorded well holding more than its labware allows. Each issue comes back with where it is and a hint about how to fix it. Anything that depends on a *particular experiment* — running a vial dry, overflowing a well, running out of tips — is caught later, by `ztra compile`, against whichever protocol you give it.
+
+When the world matches your bench, `ztra store init world` starts the version history, and you're in the branch → compile → simulate → commit → run loop described above.
+
 ## Reading further
 
 The `docs/` folder has the details, starting with [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the overall design and [REQUIREMENTS.md](docs/REQUIREMENTS.md) for what v0.1 is meant to do. [PROTOTYPE_FINDINGS.md](docs/PROTOTYPE_FINDINGS.md) records the experiments that shaped the design — including the mistakes.

@@ -1,5 +1,6 @@
 """The `ztra` command. Everything it prints on stdout is JSON.
 
+  ztra init [dir]                        → scaffold a new project: world/*.yaml + protocols/first_protocol.yaml
   ztra world validate <dir>              → {ok, errors, warnings, issues[]}; exit 1 if errors
   ztra world dump <dir>                  → the whole world as JSON, keys sorted
   ztra world hash <dir>                  → {hash}
@@ -49,6 +50,7 @@ from ztra.preflight import attach, preflight
 from ztra.drivers.fake import FakeDriver
 from ztra.protocol import Protocol
 from ztra.runtime import Runtime
+from ztra.scaffold import NEXT_STEPS, ScaffoldError, scaffold
 from ztra.schedule import Budget
 from ztra.telemetry import SensorAdapter, SimulatedSensor, TelemetryService
 from ztra.sensors import Telemetry
@@ -95,6 +97,16 @@ def load_telemetry(path: str) -> Telemetry:
     except ValueError as e:
         out({"ok": False, "load_error": str(e)})
         sys.exit(2)
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    try:
+        created = scaffold(Path(args.dir))
+    except ScaffoldError as e:
+        out({"ok": False, "error": e.to_dict()})
+        return 1
+    out({"ok": True, "dir": args.dir, "created": created, "next": NEXT_STEPS})
+    return 0
 
 
 def cmd_world(args: argparse.Namespace) -> int:
@@ -296,6 +308,10 @@ def store_action(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="ztra")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    i = sub.add_parser("init")
+    i.add_argument("dir", nargs="?", default=".")
+    i.set_defaults(func=cmd_init)
 
     w = sub.add_parser("world")
     w.add_argument("action", choices=["validate", "dump", "hash", "summary"])
