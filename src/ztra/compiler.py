@@ -16,6 +16,7 @@ from ztra.schedule import Budget, schedule
 from ztra.protocol import (
     PROTOCOL_VERSION,
     Condition,
+    ForEach,
     ForWells,
     IfObserved,
     Loc,
@@ -148,28 +149,65 @@ class _Unroller:
         self.world = world
         self.labels: list[str] = []  # observation labels seen so far on this path
         self.bindings: dict[str, str] = {}  # for_wells variables in scope → well
+        self.items: dict[str, dict[str, str | float]] = {}  # for_each variables in scope → the current item
+
+    def scope(self) -> dict[str, str]:
+        """Every variable in scope, flattened for an op's origin: w → B2, item.volume_ul → 20."""
+        flat = dict(self.bindings)
+        for name, item in self.items.items():
+            for col, v in item.items():
+                flat[f"{name}.{col}"] = fmt(v) if isinstance(v, float) else str(v)
+        return flat
+
+    def resolve(self, ref: str, want: str, origin: Origin) -> str | float:
+        """What a `$name` (for_wells) or `$name.column` (for_each) stands for right now,
+        checked to be the kind of value the field needs."""
+        name, _, col = ref[1:].partition(".")
+        in_scope = sorted(["$" + b for b in self.bindings] + [f"${n}.{c}" for n, it in self.items.items() for c in it])
+        if not col:
+            if name not in self.bindings:
+                raise CompileError("E_UNBOUND_VARIABLE", "a $variable must come from an enclosing for_wells or for_each", ref, f"one of {in_scope or 'none in scope'}", ref, f"wrap the step in for_wells with as: {name}", origin=origin)
+            value: str | float = self.bindings[name]
+        else:
+            if name not in self.items:
+                raise CompileError("E_UNBOUND_VARIABLE", "a $variable must come from an enclosing for_wells or for_each", ref, f"one of {in_scope or 'none in scope'}", ref, f"wrap the step in for_each with as: {name}", origin=origin)
+            if col not in self.items[name]:
+                raise CompileError("E_UNBOUND_VARIABLE", "a $name.column must name a column every item has", ref, f"one of {sorted(f'${name}.{c}' for c in self.items[name])}", ref, "add the column to every item, or fix the name", origin=origin)
+            value = self.items[name][col]
+        if want == "volume" and not isinstance(value, float):
+            raise CompileError("E_VARIABLE_TYPE", "a variable used as a volume must hold a number", ref, "a number", repr(value), "give the column numeric values", origin=origin)
+        if want != "volume" and not isinstance(value, str):
+            raise CompileError("E_VARIABLE_TYPE", f"a variable used as a {want} must hold a name", ref, "a name", repr(value), f"give the column {want} names", origin=origin)
+        return value
 
     def bind(self, loc: Loc, origin: Origin) -> Loc:
-        """Replace `$name` in a well field with the well it stands for."""
+        """Replace `$...` in a well or vial field with what it stands for."""
         if isinstance(loc, WellLoc) and loc.well.startswith("$"):
-            name = loc.well[1:]
-            if name not in self.bindings:
-                raise CompileError("E_UNBOUND_VARIABLE", "a $variable in a well field must come from an enclosing for_wells", loc.well, f"one of {sorted('$' + b for b in self.bindings) or 'none in scope'}", loc.well, "wrap the step in for_wells with as: " + name, origin=origin)
-            return WellLoc(plate=loc.plate, well=self.bindings[name])
+            return WellLoc(plate=loc.plate, well=str(self.resolve(loc.well, "well", origin)))
+        if isinstance(loc, VialLoc) and loc.vial.startswith("$"):
+            return VialLoc(vial=str(self.resolve(loc.vial, "vial", origin)))
         return loc
+
+    def volume(self, v: float | str, origin: Origin) -> float:
+        if isinstance(v, str):
+            if not v.startswith("$"):
+                raise CompileError("E_VARIABLE_TYPE", "a volume is a number or a $variable", "volume_ul", "a number or $item.column", repr(v), "write the volume as a number", origin=origin)
+            return float(self.resolve(v, "volume", origin))
+        return v
 
     def unroll(self, steps: list[Step], path: list[int], iters: list[int]) -> list[PirH]:
         out: list[PirH] = []
         for i, step in enumerate(steps):
-            origin = Origin(step_path=[*path, i], iterations=list(iters), bindings=dict(self.bindings))
+            origin = Origin(step_path=[*path, i], iterations=list(iters), bindings=self.scope())
             if isinstance(step, Thaw):
                 port = Port(loc=VialLoc(vial=step.vial), volume_ul=0.0)
                 out.append(Transform(kind=TransformKind.thaw, inputs=[port], outputs=[port], origin=origin))
             elif isinstance(step, Transfer):
                 src, dst = self.bind(step.from_, origin), self.bind(step.to, origin)
-                out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=src, volume_ul=step.volume_ul)], outputs=[Port(loc=dst, volume_ul=step.volume_ul)], origin=origin))
+                vol = self.volume(step.volume_ul, origin)
+                out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=src, volume_ul=vol)], outputs=[Port(loc=dst, volume_ul=vol)], origin=origin))
             elif isinstance(step, Mix):
-                port = Port(loc=self.bind(step.at, origin), volume_ul=step.volume_ul)
+                port = Port(loc=self.bind(step.at, origin), volume_ul=self.volume(step.volume_ul, origin))
                 out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, origin=origin))
             elif isinstance(step, Repeat):
                 if step.times == 0:
@@ -182,12 +220,21 @@ class _Unroller:
                     raise CompileError("E_WELL_RANGE", "for_wells takes well names or same-row / same-column ranges", "for_wells", "names like A2, or ranges like A2..E2 / A2..A5", str(step.wells), "fix the list; a range must stay in one row or one column", origin=origin)
                 if not wells:
                     raise CompileError("E_LOOP_BOUND", "a for_wells must name at least one well", "for_wells", ">= 1 well", "0", "list the wells", origin=origin)
-                if step.as_ in self.bindings:
-                    raise CompileError("E_VARIABLE_SHADOWED", "a nested for_wells must use a different variable name", f"${step.as_}", "an unused name", f"${step.as_} already bound", "change `as:` on the inner loop", origin=origin)
+                if step.as_ in self.bindings or step.as_ in self.items:
+                    raise CompileError("E_VARIABLE_SHADOWED", "a nested loop must use a different variable name", f"${step.as_}", "an unused name", f"${step.as_} already bound", "change `as:` on the inner loop", origin=origin)
                 for k, well in enumerate(wells, start=1):
                     self.bindings[step.as_] = well
                     out.extend(self.unroll(step.body, [*path, i], [*iters, k]))
                 del self.bindings[step.as_]
+            elif isinstance(step, ForEach):
+                if not step.items:
+                    raise CompileError("E_LOOP_BOUND", "a for_each must have at least one item", "for_each", ">= 1 item", "0", "list the items", origin=origin)
+                if step.as_ in self.bindings or step.as_ in self.items:
+                    raise CompileError("E_VARIABLE_SHADOWED", "a nested loop must use a different variable name", f"${step.as_}", "an unused name", f"${step.as_} already bound", "change `as:` on the inner loop", origin=origin)
+                for k, item in enumerate(step.items, start=1):
+                    self.items[step.as_] = item
+                    out.extend(self.unroll(step.body, [*path, i], [*iters, k]))
+                del self.items[step.as_]
             elif isinstance(step, Observe):
                 sensor = self.world.hardware.sensors.get(step.sensor)
                 if sensor is None:

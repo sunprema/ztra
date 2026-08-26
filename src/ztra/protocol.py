@@ -61,7 +61,7 @@ class Transfer(Strict):
     op: Literal["transfer"]
     from_: Loc = Field(alias="from")
     to: Loc
-    volume_ul: float
+    volume_ul: float | str  # a number, or `$item.column` inside a for_each
 
 
 class Mix(Strict):
@@ -69,7 +69,7 @@ class Mix(Strict):
 
     op: Literal["mix"]
     at: Loc
-    volume_ul: float
+    volume_ul: float | str
     repetitions: int = 3
 
 
@@ -91,6 +91,18 @@ class ForWells(Strict):
     body: list[Step]
 
 
+class ForEach(Strict):
+    """Run the body once per item of a table. Each item is a small mapping, like
+    {well: A1, volume_ul: 20}; `$<as>.<column>` stands for that item's value in
+    well, vial and volume_ul fields. This is the per-well spreadsheet, kept inside
+    the protocol so the compiler checks every row."""
+
+    op: Literal["for_each"]
+    items: list[dict[str, str | float]]
+    as_: str = Field(default="item", alias="as")
+    body: list[Step]
+
+
 class Observe(Strict):
     """Take a reading with a sensor from Hardware.yaml. The label lets a later if_observed refer to it."""
 
@@ -109,10 +121,11 @@ class IfObserved(Strict):
     otherwise: list[Step] = Field(default_factory=list)
 
 
-Step = Annotated[Union[Thaw, Transfer, Mix, Repeat, ForWells, Observe, IfObserved], Field(discriminator="op")]
+Step = Annotated[Union[Thaw, Transfer, Mix, Repeat, ForWells, ForEach, Observe, IfObserved], Field(discriminator="op")]
 
 Repeat.model_rebuild()
 ForWells.model_rebuild()
+ForEach.model_rebuild()
 IfObserved.model_rebuild()
 
 

@@ -23,10 +23,10 @@ problem ztra exists to solve, and these recipes become obsolete under it.
 In **implementation order** — dependency- and risk-aware, smallest useful step first, ending at the
 workflow that needs them all. Sizes: S = a day or less, M = days, L = a week-scale change.
 
-1. **Per-well parameter tables (S).** The two CSV recipes exist to give each well its own volume.
-   `for_wells` substitutes only the well name; extend the loop to bind per-well values (well → volume, and
-   later well → source). Kills the entire CSV/`is_simulating()` machinery: the table lives in the
-   versioned protocol, and the compiler checks every row.
+1. **Per-well parameter tables (S) — done 2026-08-26.** The two CSV recipes exist to give each well its
+   own volume. Now `for_each` (PROTOCOL.md): a list of items, `$row.well` / `$row.volume_ul` /
+   `$row.source` in the body, every row compiled. Kills the entire CSV/`is_simulating()` machinery: the
+   table lives in the versioned protocol. Example: `examples/protocols/volume_gradient.yaml`.
 2. **Reservoirs and a waste container (M).** Wash protocols draw from troughs
    (`nest_1_reservoir_195ml`, 12-channel reservoirs) and dump supernatant into a liquid waste. The world
    model insists plates are 8×12 and has no reservoir or waste concept. New labware kinds plus linker/

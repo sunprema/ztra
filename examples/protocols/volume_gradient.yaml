@@ -1,0 +1,16 @@
+# A per-well table, the ztra answer to "read the volumes from a CSV": each item
+# is one row, and `$row.<column>` stands for that row's value inside the body.
+# Here column 3 gets a water gradient, 20..100 uL in 20 uL steps.
+version: 1
+name: volume_gradient_column_3
+steps:
+  - op: for_each
+    as: row
+    items:
+      - { well: A3, volume_ul: 20 }
+      - { well: B3, volume_ul: 40 }
+      - { well: C3, volume_ul: 60 }
+      - { well: D3, volume_ul: 80 }
+      - { well: E3, volume_ul: 100 }
+    body:
+      - { op: transfer, from: { vial: V_water }, to: { plate: P1, well: $row.well }, volume_ul: $row.volume_ul }

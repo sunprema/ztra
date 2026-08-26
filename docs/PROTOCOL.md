@@ -42,6 +42,14 @@ steps:
     body:
       - { op: transfer, from: { vial: V_water }, to: { plate: P1, well: $w }, volume_ul: 180 }
 
+  - op: for_each                            # once per row of a table; $row.<column> stands for a value
+    as: row                                 # default: item
+    items:                                  # any columns you like; every row needs the ones the body uses
+      - { well: A3, volume_ul: 20 }
+      - { well: B3, volume_ul: 40 }
+    body:
+      - { op: transfer, from: { vial: V_water }, to: { plate: P1, well: $row.well }, volume_ul: $row.volume_ul }
+
   - op: observe                             # take a reading; the label names it
     sensor: scale_1                         # must exist in Hardware.sensors
     label: after_fill
@@ -57,8 +65,10 @@ Unknown fields and unknown `op`s are rejected at load.
 
 ### Language rules (FR-2.6 — total and bounded)
 
-- `repeat.times` is a literal ≥ 1; `for_wells.wells` is an explicit list. There is no `while`, no recursion, no arithmetic.
-- `$name` may appear only in `well:` fields and only inside a `for_wells` that binds it; nested loops need different names.
+- `repeat.times` is a literal ≥ 1; `for_wells.wells` and `for_each.items` are explicit lists. There is no `while`, no recursion, no arithmetic.
+- `$name` (from `for_wells`) may appear in `well:` fields; `$name.column` (from `for_each`) may appear in
+  `well:`, `vial:` and `volume_ul:` fields, and must hold a name or a number respectively. Variables must be
+  bound by an enclosing loop; nested loops need different names.
 - `if_observed` may only test an `observe` that appears **earlier on the same path**. A label taken inside
   one arm of a branch is not visible after the branch.
 - Branching multiplies the number of paths the compiler must check; more than **64 paths** (`MAX_PATHS`)
@@ -101,6 +111,7 @@ Per-step transitions and checks:
 |---|---|---|
 | `thaw` | vial exists (`E_UNKNOWN_ENTITY`) | state → thawed; cycles += 1 |
 | `for_wells` | wells well-formed (`E_WELL_RANGE`), non-empty, variable not already bound | body unrolled once per well with `$name` substituted |
+| `for_each` | items non-empty (`E_LOOP_BOUND`), variable not already bound; every `$name.column` used exists (`E_UNBOUND_VARIABLE`) and has the right kind of value (`E_VARIABLE_TYPE`) | body unrolled once per item with `$name.column` substituted; the values land in each op's `origin.bindings` |
 | `transfer` | volume > 0 and ≥ smallest pipette min (`E_PIPETTE_RANGE`); source exists, not consumed (`E_CONSUMED`), thawed if a vial (`E_STATE`), holds ≥ volume (`E_VOLUME`); destination exists (`E_UNKNOWN_ENTITY`, `E_COORDINATE`), has capacity (`E_OVERFLOW`), no incompatible hazard classes meet (`E_HAZARD`), vial destination holds the same reagent (`E_MIXTURE_IN_VIAL`); a free compatible tip exists on the deck (`E_TIPS`) | liquid moves (mixtures move proportionally); a source vial reaching 0 becomes `consumed`; one tip is marked used; stock consumption is costed |
 | `mix` | volume within one pipette's range (no splitting), the well holds ≥ volume, a free tip | one tip used; contents unchanged |
 | `observe` | sensor exists (`E_UNKNOWN_SENSOR`) | none; cost += `read_time_s` |
@@ -119,10 +130,11 @@ must match (`E_PROTOCOL_VERSION`).
 |---|---|
 | `E_WORLD_INVALID` | the world model must validate before compiling |
 | `E_PROTOCOL_VERSION` | protocol schema version mismatch |
-| `E_LOOP_BOUND` | `repeat.times` must be ≥ 1; `for_wells.wells` must not be empty |
+| `E_LOOP_BOUND` | `repeat.times` must be ≥ 1; `for_wells.wells` / `for_each.items` must not be empty |
 | `E_WELL_RANGE` | a `for_wells` item is not a well name or a same-row / same-column range |
-| `E_UNBOUND_VARIABLE` | `$name` used outside a `for_wells` that binds it |
-| `E_VARIABLE_SHADOWED` | nested `for_wells` reusing a variable name |
+| `E_UNBOUND_VARIABLE` | `$name` / `$name.column` used outside a loop that binds it, or naming a column the item lacks |
+| `E_VARIABLE_TYPE` | a variable holds a name where a volume is needed, or a number where a well/vial name is needed |
+| `E_VARIABLE_SHADOWED` | nested loops reusing a variable name |
 | `E_UNKNOWN_SENSOR` | `observe` must name a sensor in `Hardware.sensors` |
 | `E_UNKNOWN_OBSERVATION` | `if_observed` must test an earlier observation on the same path |
 | `E_TOO_MANY_PATHS` | > `MAX_PATHS` branch paths |
@@ -137,7 +149,7 @@ must match (`E_PROTOCOL_VERSION`).
 | `E_MIXTURE_IN_VIAL` | a second reagent into a vial |
 | `E_TIPS` | no free compatible tip on the deck |
 
-Every error carries `step_path` (AST path), `iterations` (one per enclosing `repeat`/`for_wells`), `bindings` on each PIR op's origin (which well each variable was), `branch_path`,
+Every error carries `step_path` (AST path), `iterations` (one per enclosing `repeat`/`for_wells`/`for_each`), `bindings` on each PIR op's origin (what each variable stood for), `branch_path`,
 `physical_law`, `resource`, `coordinate`, `expected`, `actual`, `hint`, and `chain_of_thought` (FR-2.4).
 
 ## 5. Pre-flight
@@ -157,7 +169,6 @@ not modelled.
 ## 7. Not in v1
 
 - Static deck clearance checks (`E_DECK`) — with lowering, step 3.
-- Concentration tracking — needs the mixture model (ARCHITECTURE §8).
 - Evaluating conditions — the compiler never decides a branch; the runtime does, from telemetry.
 
 Implementation: `src/ztra/protocol.py`, `src/ztra/pir.py`, `src/ztra/compiler.py`.
