@@ -35,11 +35,12 @@ workflow that needs them all. Sizes: S = a day or less, M = days, L = a week-sca
    12-channel trough of wash buffer.
 3. **A timed `delay` step (S) — done 2026-08-26.** Incubations ("3 minutes on the magnet") are load-bearing
    steps. `delay {seconds, minutes}` is costed, lowers to `ctx.delay`, and is accepted by the vendor engine.
-4. **Tip economy (M).** Recipes reuse tips deliberately (`return_tip()`, per-well tips kept across wash
-   rounds) and replenish racks mid-run (`pause` + `reset_tipracks()`). ztra is fresh-tip-only, so a real
-   wash protocol would burn racks the deck cannot hold. Needs a tip-reuse strategy in lowering, and a
-   `replenish_tips` step — a *human mutation of the world mid-protocol*, made explicit so the compiler can
-   verify everything after it, rather than an untracked pause.
+4. **Tip economy (M) — done 2026-08-26.** Recipes reuse tips deliberately (`return_tip()`, per-well tips
+   kept across wash rounds) and replenish racks mid-run (`pause` + `reset_tipracks()`). Now `with_tip`
+   (one tip for a block; a named tip returns to its position and comes out again later) with the
+   one-source rule `E_TIP_CONTAMINATION`, and `replenish_tips` — the human's rack swap as an explicit,
+   compiler-verified step that lowers to a pause plus `reset_tipracks()`. The vendor engine accepts both
+   the return-and-re-pick and the swap (PROTOCOL.md).
 5. **Position and flow control, with labware geometry (M).** Supernatant removal aspirates offset
    *sideways* from the bead pellet (`bottom().move(Point(x=side))`) at reduced flow rate, dispenses at
    `well.top(-3)`, uses 10 µL air gaps and `blow_out()`. PIR-L ops carry only (labware, well, volume);

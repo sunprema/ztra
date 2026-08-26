@@ -114,6 +114,17 @@ Language rules — **the protocol must be total and bounded** **[U1]**:
 - Branching is allowed only on the result of an `Observe` taken earlier on the same path. The compiler is **path-sensitive**: it forks the world at each branch and checks the rest of the protocol on every path, so prediction is a *set* of outcomes (one per path, tagged with its branch conditions). A step that is invalid on any path is a compile error naming that path. Paths are capped (64). Reference: [PROTOCOL.md](PROTOCOL.md).
 - No arithmetic on observed values in v0.1.
 
+**Authoring language vs. artifact (decided 2026-08-26).** The YAML AST is the *artifact*: what the store
+hashes, what the checker unrolls, what rebase replays, what errors point into. Its one load-bearing property
+is that it is **total and bounded** — static loop counts, branches only on earlier readings — because the
+checker can only verify what it can unroll (U1). That property belongs to the artifact, not the syntax. So:
+a scripting language (Lua, Python) is **not** a replacement for the artifact — Turing-complete protocols
+turn "will this terminate, and what will it do?" back into run-time questions, which is what the vendor
+scripts already are. If authoring in YAML becomes painful (macros such as a wash step used three times,
+computed volumes), the answer is a **compile-time frontend** that evaluates deterministically into the YAML
+AST — Starlark-style: terminating, hermetic — with the expanded data stored alongside the source. The
+frontend is deferred until a real protocol demands it; the growing op vocabulary is not that demand.
+
 ### 4.3 The Compiler
 
 **The compiler is an abstract interpreter.** **[U1]** It walks the AST against a cloned world, applies each step's transition, and checks preconditions at every step. "Stateful types" (`Thawed<Reagent>`) and "linear types" (use-once) are state fields plus per-op preconditions; no generics or type inference are involved.

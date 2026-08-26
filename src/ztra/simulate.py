@@ -71,6 +71,7 @@ class _Run:
     bias: dict[str, float] = field(default_factory=dict)  # per-pipette systematic error for this run
     readings: list[Reading] = field(default_factory=list)
     events: dict[str, int] = field(default_factory=lambda: {"failed_transfers": 0, "shortfalls": 0, "overflows": 0})
+    named_tips: set[str] = field(default_factory=set)  # with_tip names holding a tip, plus "rack/name" for replenish
 
 
 def simulate(world: World, pir: list[PirH], noise: Noise | None = None, seeds: int = 0, base_seed: int = 0) -> SimulationResult:
@@ -108,8 +109,13 @@ def _run(base: World, ops: list[Transform | ObserveOp], rng: random.Random | Non
         if isinstance(op, ObserveOp):
             run.readings.append(read(run.world, op.sensor, op.label))
             continue
-        if op.kind is TransformKind.delay:
-            continue  # nothing moves while waiting
+        if op.kind is TransformKind.delay or op.kind is TransformKind.tip:
+            continue  # nothing moves while waiting; a tip scope is bookkeeping, tips are taken at first use
+        if op.kind is TransformKind.replenish:
+            if op.rack in run.world.deck.tip_racks:
+                run.world.deck.tip_racks[op.rack].used = []
+            run.named_tips = {n for n in run.named_tips if not n.startswith(f"{op.rack}/")}
+            continue
         if op.kind is TransformKind.thaw:
             loc = op.inputs[0].loc
             assert isinstance(loc, VialLoc)
@@ -117,11 +123,14 @@ def _run(base: World, ops: list[Transform | ObserveOp], rng: random.Random | Non
             vial.state = ThermalState.thawed
             vial.freeze_thaw_cycles += 1
             continue
-        # transfers and mixes each use one tip, same as the compiler decided
+        # a fresh tip per transfer/mix, or one per with_tip — same as the compiler decided
         found = run.world.hardware.pipette_for(op.inputs[0].volume_ul, op.kind is TransformKind.transfer)
         pip = found[0] if found is not None else None
-        if pip is not None:
-            run.world.deck.take_tip(run.world.hardware, pip)
+        if pip is not None and (op.tip_name is None or op.tip_name not in run.named_tips):
+            taken = run.world.deck.take_tip(run.world.hardware, pip)
+            if op.tip_name is not None and taken is not None:
+                run.named_tips.add(op.tip_name)
+                run.named_tips.add(f"{taken[0]}/{op.tip_name}")
         if op.kind is TransformKind.transfer:
             _transfer(run, op, pip)
         # mix: nothing moves

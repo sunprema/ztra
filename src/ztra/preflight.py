@@ -54,6 +54,7 @@ def preflight(world: World, protocol: Protocol, budget: Budget | None = None) ->
 
     vial_need: dict[str, float] = {}
     tip_need: dict[str, int] = {}
+    tip_extra: dict[str, int] = {}  # tips that replenish_tips steps bring, per pipette
     peaks: dict[tuple[str, str], float] = {}
     frozen: list[str] = []
 
@@ -61,10 +62,20 @@ def preflight(world: World, protocol: Protocol, budget: Budget | None = None) ->
     for _, ops in all_paths:
         v_need: dict[str, float] = {}
         t_need: dict[str, int] = {}
+        t_extra: dict[str, int] = {}
         wells: dict[tuple[str, str], float] = {(pid, w): total_ul(c) for pid, p in inv.plates.items() for w, c in p.wells.items()}
         thawed = {vid for vid, v in inv.vials.items() if v.state is ThermalState.thawed}
+        shared_tips: set[str] = set()  # with_tip names that already hold a tip on this path
         for op in ops:
-            if isinstance(op, ObserveOp) or op.kind is TransformKind.delay:
+            if isinstance(op, ObserveOp) or op.kind in (TransformKind.delay, TransformKind.tip):
+                continue
+            if op.kind is TransformKind.replenish:
+                rack = world.deck.tip_racks.get(op.rack or "")
+                d = hw.labware.get(rack.labware) if rack else None
+                if rack is not None and d is not None:
+                    for pip in hw.pipettes:
+                        if rack.labware in pip.tip_labware:
+                            t_extra[pip.name] = t_extra.get(pip.name, 0) + d.rows * d.cols
                 continue
             vol = op.inputs[0].volume_ul
             if op.kind is TransformKind.thaw:
@@ -73,8 +84,10 @@ def preflight(world: World, protocol: Protocol, budget: Budget | None = None) ->
                 thawed.add(loc.vial)
                 continue
             found = hw.pipette_for(vol, op.kind is TransformKind.transfer)
-            if found is not None:
+            if found is not None and (op.tip_name is None or op.tip_name not in shared_tips):
                 t_need[found[0].name] = t_need.get(found[0].name, 0) + 1
+                if op.tip_name is not None:
+                    shared_tips.add(op.tip_name)
             if op.kind is TransformKind.mix:
                 continue
             src, dst = op.inputs[0].loc, op.outputs[0].loc
@@ -95,6 +108,8 @@ def preflight(world: World, protocol: Protocol, budget: Budget | None = None) ->
             vial_need[k] = max(vial_need.get(k, 0.0), amount)
         for k, n in t_need.items():
             tip_need[k] = max(tip_need.get(k, 0), n)
+        for k, n in t_extra.items():
+            tip_extra[k] = max(tip_extra.get(k, 0), n)
 
     vials: dict[str, Demand] = {}
     reagent_need: dict[str, float] = {}
@@ -119,6 +134,7 @@ def preflight(world: World, protocol: Protocol, budget: Budget | None = None) ->
             d = hw.labware.get(rack.labware)
             if d is not None and rack.labware in pip.tip_labware and world.deck.slot_of(rid) is not None:
                 free += d.rows * d.cols - len(rack.used)
+        free += tip_extra.get(pip.name, 0)
         tips[pip.name] = Demand(needed=need_n, available=free, shortfall=max(0, need_n - free), unit="tips")
 
     over: list[WellPeak] = []

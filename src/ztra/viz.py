@@ -10,7 +10,7 @@ import itertools
 from dataclasses import dataclass
 
 from ztra.diff import Verdict, WorldDiff
-from ztra.lower import Aspirate, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, PirL, lower
+from ztra.lower import Aspirate, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, PirL, ReturnTip, lower
 from ztra.protocol import Protocol
 from ztra.schedule import Budget
 from ztra.world import World
@@ -272,6 +272,8 @@ def describe_op(world: World, op: PirL) -> str:
         return f"mix {op.repetitions} x {op.volume_ul:g} uL at {place(op.labware, op.well)}"
     if isinstance(op, DropTip):
         return "drop tip into trash"
+    if isinstance(op, ReturnTip):
+        return f"return tip to {op.rack} {op.well}"
     if isinstance(op, Pause):
         return op.message
     if isinstance(op, ObserveL):

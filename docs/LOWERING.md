@@ -18,6 +18,8 @@ ztra lower <world_dir> <protocol.yaml> --out <dir>  → writes program.json + se
 | `transform mix at W, v µL × n` | `pick_up_tip`, `mix`, `drop_tip` |
 | `observe sensor` | `observe` (robot pauses; the telemetry service reads) |
 | `transform delay` | `delay seconds` (the robot waits on its own) |
+| `transform tip pick` / `drop` / `return` | opens a shared-tip scope (the tip is picked at the first step inside); `drop_tip` or `return_tip` at the end |
+| `transform replenish` | `pause "Replace tip rack R…"` with `replenish_rack: R`; the backend adds `reset_tipracks()` for every pipette that uses the rack; allocation restarts at A1 |
 | `branch` | a segment boundary — see §2 |
 
 Along the way it:
@@ -29,7 +31,7 @@ Along the way it:
 - **picks tips** the same way the compiler does (column-major, racks in id order, placed racks only), so the
   tip wells in the vendor code match the predicted world's `tip_racks.used`. Error: `E_TIPS`.
 
-PIR-L ops: `pick_up_tip`, `aspirate`, `dispense`, `mix`, `drop_tip`, `pause`, `observe`, `delay`. Every op keeps
+PIR-L ops: `pick_up_tip`, `aspirate`, `dispense`, `mix`, `drop_tip`, `return_tip`, `pause`, `observe`, `delay`. Every op keeps
 its `origin` (protocol step and loop iteration), and the backend writes it as a comment above the code.
 
 ## 2. Segments

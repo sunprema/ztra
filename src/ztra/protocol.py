@@ -81,6 +81,25 @@ class Delay(Strict):
     minutes: float = 0
 
 
+class WithTip(Strict):
+    """One tip for the whole body instead of a fresh tip per step. The tip may only ever
+    draw from one location (the compiler refuses cross-contamination). A named tip goes
+    back to its rack position at the end and can be picked up again later by name — the
+    dedicated-tip-per-well pattern of wash protocols."""
+
+    op: Literal["with_tip"]
+    name: str | None = None
+    body: list[Step]
+
+
+class ReplenishTips(Strict):
+    """A person swaps in a fresh tip rack. Every position counts as fresh from here on;
+    the robot pauses for it. Explicit, so the compiler can verify what follows."""
+
+    op: Literal["replenish_tips"]
+    rack: str
+
+
 class Repeat(Strict):
     """Run the body a fixed number of times."""
 
@@ -129,8 +148,9 @@ class IfObserved(Strict):
     otherwise: list[Step] = Field(default_factory=list)
 
 
-Step = Annotated[Union[Thaw, Transfer, Mix, Delay, Repeat, ForWells, ForEach, Observe, IfObserved], Field(discriminator="op")]
+Step = Annotated[Union[Thaw, Transfer, Mix, Delay, WithTip, ReplenishTips, Repeat, ForWells, ForEach, Observe, IfObserved], Field(discriminator="op")]
 
+WithTip.model_rebuild()
 Repeat.model_rebuild()
 ForWells.model_rebuild()
 ForEach.model_rebuild()

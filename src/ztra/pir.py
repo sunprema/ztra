@@ -32,6 +32,8 @@ class TransformKind(str, Enum):
     transfer = "transfer"
     mix = "mix"
     delay = "delay"  # time passes, nothing moves (an incubation)
+    tip = "tip"  # opens or closes a shared-tip scope (with_tip)
+    replenish = "replenish"  # a person swaps in a fresh tip rack
 
 
 class Transform(Strict):
@@ -41,6 +43,9 @@ class Transform(Strict):
     outputs: list[Port]
     repetitions: int | None = None
     seconds: float | None = None  # delay only
+    tip_name: str | None = None  # transfer/mix inside a with_tip: use that tip instead of a fresh one
+    tip_action: Literal["pick", "drop", "return"] | None = None  # tip only
+    rack: str | None = None  # replenish only
     origin: Origin
 
 

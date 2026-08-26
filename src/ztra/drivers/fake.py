@@ -9,7 +9,7 @@ from typing import Literal
 
 from ztra.compiler import deposit_liquid, remove_liquid, take_liquids
 from ztra.driver import DriverFault, Hooks
-from ztra.lower import Aspirate, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, Segment
+from ztra.lower import Aspirate, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, ReturnTip, Segment
 from ztra.protocol import Loc, VialLoc, WellLoc
 from ztra.world import World
 from ztra.world.inventory import Liquid, ThermalState, total_ul
@@ -70,6 +70,9 @@ class FakeDriver:
             elif isinstance(op, DropTip):
                 self.held = []
                 log.append("Dropping tip into trash")
+            elif isinstance(op, ReturnTip):
+                self.held = []
+                log.append(f"Returning tip to {op.well} of {op.rack}")
             elif isinstance(op, Pause):
                 if op.message.startswith("Thaw "):
                     vial = op.message.split()[1]
@@ -77,6 +80,8 @@ class FakeDriver:
                         v = self.physical.inventory.vials[vial]
                         v.state = ThermalState.thawed
                         v.freeze_thaw_cycles += 1
+                if op.replenish_rack in self.physical.deck.tip_racks:
+                    self.physical.deck.tip_racks[op.replenish_rack].used = []  # the person did swap the rack
                 log.append(f"Pausing: {op.message}")
                 hooks.on_pause(op, i)
             elif isinstance(op, ObserveL):

@@ -36,6 +36,13 @@ steps:
     minutes: 3                              # seconds and minutes add up; must be > 0
     seconds: 0
 
+  - op: with_tip                            # one tip for the whole body instead of one per step
+    name: t_A1                              # optional: a named tip returns to its rack position and can
+    body: [ ...steps... ]                   #   be picked up again later by the same name
+
+  - op: replenish_tips                      # a person swaps in a fresh rack; the robot pauses for it
+    rack: TIPS1                             # every position is free again from here on
+
   - op: repeat                              # static bound, fully unrolled
     times: 3
     body: [ ...steps... ]
@@ -78,6 +85,11 @@ Unknown fields and unknown `op`s are rejected at load.
 - Branching multiplies the number of paths the compiler must check; more than **64 paths** (`MAX_PATHS`)
   is `E_TOO_MANY_PATHS`.
 - Vials hold a single reagent; mixtures live in plate wells (`E_MIXTURE_IN_VIAL`).
+- **Tips.** Outside a `with_tip`, every transfer and mix takes a fresh tip. Inside one, the first step picks a
+  tip up and the rest reuse it; a tip may only ever draw from **one location** (`E_TIP_CONTAMINATION`) and fits
+  one pipette (`E_TIP_PIPETTE`). A *named* tip goes back to its rack position at the end of the block and is
+  picked up again by a later block with the same name — still bound to its one source. Blocks do not nest and
+  racks are not swapped inside them (`E_TIP_SCOPE`).
 
 ## 2. PIR-H
 
@@ -103,7 +115,7 @@ outcomes**, one per path, each carrying:
 
 - `conditions` — the branch decisions that lead here (`after_fill: mass_mg >= 215 => true`)
 - `world` and `world_hash` — the predicted world model on that path
-- `cost` — `thaws, transfers, aspirations, mixes, tips_used, observations, reagent_consumed_ul{}, estimated_time_s`
+- `cost` — `thaws, transfers, aspirations, mixes, delays, tips_used, tip_racks_replaced, observations, reagent_consumed_ul{}, estimated_time_s` (`tips_used` counts fresh tips: a shared or reused tip counts once)
 - `trace` — the chain of thought (NFR-5.1)
 
 An unconditional protocol has exactly one outcome. All outcomes are checked; the first violation on any path
@@ -119,6 +131,8 @@ Per-step transitions and checks:
 | `transfer` | volume > 0 and ≥ smallest pipette min (`E_PIPETTE_RANGE`); source exists, not consumed (`E_CONSUMED`), thawed if a vial (`E_STATE`), holds ≥ volume (`E_VOLUME`); destination exists (`E_UNKNOWN_ENTITY`, `E_COORDINATE`), has capacity (`E_OVERFLOW`), no incompatible hazard classes meet (`E_HAZARD`), vial destination holds the same reagent (`E_MIXTURE_IN_VIAL`); a free compatible tip exists on the deck (`E_TIPS`) | liquid moves (mixtures move proportionally); a source vial reaching 0 becomes `consumed`; one tip is marked used; stock consumption is costed |
 | `mix` | volume within one pipette's range (no splitting), the well holds ≥ volume, a free tip | one tip used; contents unchanged |
 | `delay` | duration > 0 (`E_DELAY`) | nothing moves; cost += the wait |
+| `with_tip` | not nested (`E_TIP_SCOPE`); inside: one pipette (`E_TIP_PIPETTE`), one source (`E_TIP_CONTAMINATION`) | one tip for the body, taken at the first step; named tips are remembered (rack, well, source) and not taken again |
+| `replenish_tips` | rack exists (`E_UNKNOWN_ENTITY`), not inside a `with_tip` | every position of the rack becomes free; named tips that lived there are forgotten; cost += 1 rack |
 | `observe` | sensor exists (`E_UNKNOWN_SENSOR`) | none; cost += `read_time_s` |
 | `if_observed` | label observed earlier on this path (`E_UNKNOWN_OBSERVATION`) | fork |
 
@@ -154,6 +168,9 @@ must match (`E_PROTOCOL_VERSION`).
 | `E_MIXTURE_IN_VIAL` | a second reagent into a vial |
 | `E_WASTE_SOURCE` | aspirating or mixing in a waste reservoir; what went in is gone |
 | `E_DELAY` | a delay must last a positive time |
+| `E_TIP_SCOPE` | `with_tip` blocks do not nest; no rack swap inside one |
+| `E_TIP_PIPETTE` | every step under one `with_tip` must use the same pipette |
+| `E_TIP_CONTAMINATION` | a shared or named tip may only ever draw from one location |
 | `E_TIPS` | no free compatible tip on the deck |
 
 Every error carries `step_path` (AST path), `iterations` (one per enclosing `repeat`/`for_wells`/`for_each`), `bindings` on each PIR op's origin (what each variable stood for), `branch_path`,

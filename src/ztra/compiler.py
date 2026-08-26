@@ -25,11 +25,13 @@ from ztra.protocol import (
     Observe,
     Protocol,
     Repeat,
+    ReplenishTips,
     Step,
     Thaw,
     Transfer,
     VialLoc,
     WellLoc,
+    WithTip,
     fmt,
     loc_str,
 )
@@ -59,7 +61,8 @@ class Cost:
     aspirations: int = 0  # aspirate/dispense cycles; more than transfers when a volume had to be split
     mixes: int = 0
     delays: int = 0
-    tips_used: int = 0
+    tips_used: int = 0  # fresh tips taken from racks; a shared or reused tip counts once
+    tip_racks_replaced: int = 0
     observations: int = 0
     reagent_consumed_ul: dict[str, float] = field(default_factory=dict)  # stock drawn from vials, per reagent
     estimated_time_s: float = 0.0
@@ -152,6 +155,8 @@ class _Unroller:
         self.labels: list[str] = []  # observation labels seen so far on this path
         self.bindings: dict[str, str] = {}  # for_wells variables in scope → well
         self.items: dict[str, dict[str, str | float]] = {}  # for_each variables in scope → the current item
+        self.tip_scope: str | None = None  # the with_tip we are inside, if any
+        self.anonymous_tips = 0
 
     def scope(self) -> dict[str, str]:
         """Every variable in scope, flattened for an op's origin: w → B2, item.volume_ul → 20."""
@@ -207,10 +212,25 @@ class _Unroller:
             elif isinstance(step, Transfer):
                 src, dst = self.bind(step.from_, origin), self.bind(step.to, origin)
                 vol = self.volume(step.volume_ul, origin)
-                out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=src, volume_ul=vol)], outputs=[Port(loc=dst, volume_ul=vol)], origin=origin))
+                out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=src, volume_ul=vol)], outputs=[Port(loc=dst, volume_ul=vol)], tip_name=self.tip_scope, origin=origin))
             elif isinstance(step, Mix):
                 port = Port(loc=self.bind(step.at, origin), volume_ul=self.volume(step.volume_ul, origin))
-                out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, origin=origin))
+                out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, tip_name=self.tip_scope, origin=origin))
+            elif isinstance(step, WithTip):
+                if self.tip_scope is not None:
+                    raise CompileError("E_TIP_SCOPE", "a pipette holds one tip; with_tip does not nest", f"with_tip {step.name or ''}".strip(), "no enclosing with_tip", f"inside with_tip {self.tip_scope}", "close the outer with_tip first", origin=origin)
+                if step.name is None:
+                    self.anonymous_tips += 1
+                name = step.name or f"_tip{self.anonymous_tips}"
+                out.append(Transform(kind=TransformKind.tip, inputs=[], outputs=[], tip_name=name, tip_action="pick", origin=origin))
+                self.tip_scope = name
+                out.extend(self.unroll(step.body, [*path, i], iters))
+                self.tip_scope = None
+                out.append(Transform(kind=TransformKind.tip, inputs=[], outputs=[], tip_name=name, tip_action="return" if step.name else "drop", origin=origin))
+            elif isinstance(step, ReplenishTips):
+                if self.tip_scope is not None:
+                    raise CompileError("E_TIP_SCOPE", "a rack cannot be swapped while a tip is in use", step.rack, "outside any with_tip", f"inside with_tip {self.tip_scope}", "move replenish_tips outside the with_tip", origin=origin)
+                out.append(Transform(kind=TransformKind.replenish, inputs=[], outputs=[], rack=step.rack, origin=origin))
             elif isinstance(step, Delay):
                 seconds = step.seconds + 60.0 * step.minutes
                 if not seconds > 0:
@@ -264,15 +284,28 @@ class _Unroller:
 # ---------------------------------------------------------------- pass 2: path-sensitive check
 
 
+@dataclass(frozen=True)
+class _TipRecord:
+    """A tip that has been picked up under a name: where it lives, which pipette it fits,
+    and the one location it has drawn from."""
+
+    rack: str
+    well: str
+    pipette: str
+    source: str
+
+
 @dataclass
 class _PathState:
     world: World
     conditions: list[PathCondition]
     trace: list[str]
     cost: Cost
+    tips: dict[str, _TipRecord] = field(default_factory=dict)  # named / shared tips still in play
+    held: str | None = None  # the with_tip scope we are inside
 
     def fork(self) -> _PathState:
-        return _PathState(self.world.clone(), list(self.conditions), list(self.trace), Cost(**{**self.cost.__dict__, "reagent_consumed_ul": dict(self.cost.reagent_consumed_ul)}))
+        return _PathState(self.world.clone(), list(self.conditions), list(self.trace), Cost(**{**self.cost.__dict__, "reagent_consumed_ul": dict(self.cost.reagent_consumed_ul)}), dict(self.tips), self.held)
 
 
 @dataclass
@@ -338,15 +371,14 @@ class _Checker:
             pipette, cycles = self.choose_pipette(st, origin, vol, allow_split=True)
             taken = self.take(st, origin, src, vol)
             self.check_destination(st, origin, dst, taken.liquids, vol)
-            tip = self.allocate_tip(st, origin, pipette)
+            tip, changed = self.use_tip(st, origin, pipette, op.tip_name, src)
             self.remove(st, src, vol)
             self.deposit(st, dst, taken.liquids)
             if taken.from_stock is not None:
                 st.cost.reagent_consumed_ul[taken.from_stock] = st.cost.reagent_consumed_ul.get(taken.from_stock, 0.0) + vol
             st.cost.transfers += 1
             st.cost.aspirations += cycles
-            st.cost.tips_used += 1
-            st.cost.estimated_time_s += cycles * self.cost_model.seconds_per_aspiration_cycle + self.cost_model.seconds_per_tip_change
+            st.cost.estimated_time_s += cycles * self.cost_model.seconds_per_aspiration_cycle + (self.cost_model.seconds_per_tip_change if changed else 0.0)
             plural = "s" if cycles > 1 else ""
             st.trace.append(f"transfer {fmt(vol)} uL {loc_str(src)} -> {loc_str(dst)} with {pipette.name} ({cycles} cycle{plural}), tip {tip}")
         elif op.kind is TransformKind.delay:
@@ -354,16 +386,56 @@ class _Checker:
             st.cost.delays += 1
             st.cost.estimated_time_s += seconds
             st.trace.append(f"wait {fmt(seconds)} s")
+        elif op.kind is TransformKind.tip:
+            name = op.tip_name or ""
+            if op.tip_action == "pick":
+                st.held = name
+                st.trace.append(f"with_tip {name}: one tip for the steps that follow" + (" (picked up again)" if name in st.tips else ""))
+            else:
+                rec = st.tips.get(name)
+                st.held = None
+                if op.tip_action == "drop":
+                    st.tips.pop(name, None)
+                    st.trace.append(f"drop tip {rec.rack}:{rec.well}" if rec else f"with_tip {name}: no tip was needed")
+                else:
+                    st.trace.append(f"return tip {rec.rack}:{rec.well} ({name}) to its rack" if rec else f"with_tip {name}: no tip was needed")
+        elif op.kind is TransformKind.replenish:
+            rack = op.rack or ""
+            if rack not in st.world.deck.tip_racks:
+                raise self.err(st, "E_UNKNOWN_ENTITY", origin, "every entity must exist in the world model", rack, "a tip rack in Deck.tip_racks", "not found", "check the rack id")
+            st.world.deck.tip_racks[rack].used = []
+            st.tips = {n: r for n, r in st.tips.items() if r.rack != rack}  # those tips left with the old rack
+            st.cost.tip_racks_replaced += 1
+            st.trace.append(f"replenish_tips {rack}: a person swaps in a fresh rack; every position is free again")
         else:
             at, vol = op.inputs[0].loc, op.inputs[0].volume_ul
             pipette, _ = self.choose_pipette(st, origin, vol, allow_split=False)
             self.take(st, origin, at, vol)  # checks presence and volume; nothing moves
-            tip = self.allocate_tip(st, origin, pipette)
+            tip, changed = self.use_tip(st, origin, pipette, op.tip_name, at)
             reps = op.repetitions or 1
             st.cost.mixes += 1
-            st.cost.tips_used += 1
-            st.cost.estimated_time_s += reps * self.cost_model.seconds_per_mix_repetition + self.cost_model.seconds_per_tip_change
+            st.cost.estimated_time_s += reps * self.cost_model.seconds_per_mix_repetition + (self.cost_model.seconds_per_tip_change if changed else 0.0)
             st.trace.append(f"mix {fmt(vol)} uL x{reps} at {loc_str(at)} with {pipette.name}, tip {tip}")
+
+    def use_tip(self, st: _PathState, origin: Origin, pipette: Pipette, name: str | None, source: Loc) -> tuple[str, bool]:
+        """The tip a step uses: a fresh one, or the shared/named tip of the enclosing with_tip.
+        Returns its description and whether a tip was picked up for this step."""
+        if name is None:
+            st.cost.tips_used += 1
+            return self.allocate_tip(st, origin, pipette), True
+        where = loc_str(source)
+        rec = st.tips.get(name)
+        if rec is None:
+            rack_well = self.allocate_tip(st, origin, pipette)
+            rack, well = rack_well.split(":")
+            st.tips[name] = _TipRecord(rack, well, pipette.name, where)
+            st.cost.tips_used += 1
+            return f"{rack_well} ({name})", True
+        if rec.pipette != pipette.name:
+            raise self.err(st, "E_TIP_PIPETTE", origin, "a tip fits one pipette; every step under one with_tip must use the same pipette", name, rec.pipette, pipette.name, "keep volumes within one pipette's range, or use separate with_tip blocks")
+        if rec.source != where:
+            raise self.err(st, "E_TIP_CONTAMINATION", origin, "a shared tip may only ever draw from one location, or it carries liquid between sources", name, f"drawing from {rec.source}", f"drawing from {where}", "use a fresh tip (a separate with_tip, or none) for each source")
+        return f"{rec.rack}:{rec.well} ({name}, kept)", False
 
     def choose_pipette(self, st: _PathState, origin: Origin, vol: float, allow_split: bool) -> tuple[Pipette, int]:
         if not (vol > 0) or vol == float("inf"):

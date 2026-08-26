@@ -25,7 +25,9 @@ it after each reading; a real scale adapter would talk serial. Neither exists ye
 ## 2. The fake lab
 
 `FakeDriver` keeps a hidden copy of the world — the truth — and applies each PIR-L op to it with the pipettes'
-accuracy spec (one bias per run, scatter per dispense), producing an Opentrons-style run log. `SimulatedSensor`
+accuracy spec (one bias per run, scatter per dispense), producing an Opentrons-style run log. Pauses that stand
+for a person's action are acted out: a thaw pause thaws the vial, a `replenish_rack` pause empties the rack's
+`used` list, as if the person had swapped it. `SimulatedSensor`
 reads that hidden world and adds the sensor's σ. `FixedSensor` always answers the same thing (for tests, or to
 pretend an instrument misbehaves). Faults: `clog` (a dispense delivers nothing), `door_open` (the run stops).
 

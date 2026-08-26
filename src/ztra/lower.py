@@ -9,6 +9,7 @@ own copy of what follows a branch, so tip wells are exact on every path.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field
@@ -65,10 +66,22 @@ class DropTip(Strict):
 
 
 class Pause(Strict):
-    """Robot waits for a person or an instrument. Used for thawing."""
+    """Robot waits for a person or an instrument. Used for thawing and for swapping in a
+    fresh tip rack (`replenish_rack` names it)."""
 
     op: Literal["pause"] = "pause"
     message: str
+    replenish_rack: str | None = None
+    origin: Origin
+
+
+class ReturnTip(Strict):
+    """Put the tip back where it came from, to be picked up again later."""
+
+    op: Literal["return_tip"] = "return_tip"
+    pipette: str
+    rack: str
+    well: str
     origin: Origin
 
 
@@ -89,7 +102,7 @@ class Delay(Strict):
     origin: Origin
 
 
-PirL = Annotated[Union[PickUpTip, Aspirate, Dispense, MixOp, DropTip, Pause, ObserveL, Delay], Field(discriminator="op")]
+PirL = Annotated[Union[PickUpTip, Aspirate, Dispense, MixOp, DropTip, ReturnTip, Pause, ObserveL, Delay], Field(discriminator="op")]
 
 
 class Halt(Strict):
@@ -138,8 +151,22 @@ class Program(Strict):
 
 def lower(world: World, pir: list[PirH]) -> Program:
     l = _Lowerer(world)
-    l.build(world.deck.model_copy(deep=True), pir, [])
+    l.build(_Path(world.deck.model_copy(deep=True)), pir, [])
     return Program(segments=l.segments)
+
+
+@dataclass
+class _Path:
+    """What lowering carries along one path: tip usage on the deck, the named tips that
+    have been picked up (rack, well), and the with_tip scope we are inside."""
+
+    deck: Deck
+    named: dict[str, tuple[str, str]] = field(default_factory=dict)
+    scope: str | None = None
+    held: tuple[str, str, str] | None = None  # (pipette, rack, well) currently on the pipette inside the scope
+
+    def copy(self) -> _Path:
+        return _Path(self.deck.model_copy(deep=True), dict(self.named), self.scope, self.held)
 
 
 class _Lowerer:
@@ -150,9 +177,9 @@ class _Lowerer:
     def err(self, code: str, origin: Origin, law: str, resource: str, expected: str, actual: str, hint: str) -> CompileError:
         return CompileError(code, law, resource, expected, actual, hint, origin=origin)
 
-    def build(self, deck: Deck, ops: list[PirH], conts: list[list[PirH]]) -> int:
+    def build(self, path: _Path, ops: list[PirH], conts: list[list[PirH]]) -> int:
         """Build one segment from `ops` (plus whatever continuations follow), then its children.
-        `deck` carries tip usage along the path."""
+        `path` carries tip state along the path."""
         seg_id = len(self.segments)
         self.segments.append(Segment(ops=[], next=Halt()))
         out: list[PirL] = []
@@ -161,18 +188,18 @@ class _Lowerer:
             for i, op in enumerate(ops):
                 if isinstance(op, Branch):
                     inner = [*conts, ops[i + 1 :]]
-                    then_id = self.build(deck.model_copy(deep=True), op.then, inner)
-                    else_id = self.build(deck, op.otherwise, inner)
+                    then_id = self.build(path.copy(), op.then, inner)
+                    else_id = self.build(path, op.otherwise, inner)
                     self.segments[seg_id] = Segment(ops=out, next=Decide(observation=op.observation, condition=op.condition, then=then_id, otherwise=else_id))
                     return seg_id
-                self.lower_op(deck, op, out)
+                self.lower_op(path, op, out)
             if not conts:
                 break
             ops = conts.pop()
         self.segments[seg_id] = Segment(ops=out, next=Halt())
         return seg_id
 
-    def lower_op(self, deck: Deck, op: PirH, out: list[PirL]) -> None:
+    def lower_op(self, path: _Path, op: PirH, out: list[PirL]) -> None:
         if isinstance(op, ObserveOp):
             out.append(ObserveL(sensor=op.sensor, label=op.label, origin=op.origin))
             return
@@ -182,26 +209,60 @@ class _Lowerer:
             out.append(Pause(message=f"Thaw {loc_str(op.inputs[0].loc)} and resume", origin=o))
         elif op.kind is TransformKind.delay:
             out.append(Delay(seconds=op.seconds or 0.0, origin=o))
+        elif op.kind is TransformKind.tip:
+            name = op.tip_name or ""
+            if op.tip_action == "pick":
+                path.scope, path.held = name, None
+                return
+            if path.held is not None:
+                pip_name, rack, well = path.held
+                if op.tip_action == "return":
+                    out.append(ReturnTip(pipette=pip_name, rack=rack, well=well, origin=o))
+                else:
+                    out.append(DropTip(pipette=pip_name, origin=o))
+                    path.named.pop(name, None)
+            path.scope, path.held = None, None
+        elif op.kind is TransformKind.replenish:
+            rack = op.rack or ""
+            out.append(Pause(message=f"Replace tip rack {rack} with a fresh one and resume", replenish_rack=rack, origin=o))
+            if rack in path.deck.tip_racks:
+                path.deck.tip_racks[rack].used = []
+            path.named = {n: rw for n, rw in path.named.items() if rw[0] != rack}
         elif op.kind is TransformKind.transfer:
             vol = op.inputs[0].volume_ul
             pip, cycles = self.pipette(vol, True, o)
             src_lw, src_well = self.address(op.inputs[0].loc, o)
             dst_lw, dst_well = self.address(op.outputs[0].loc, o)
-            rack, well = self.tip(deck, pip, o)
-            out.append(PickUpTip(pipette=pip.name, rack=rack, well=well, origin=o))
+            self.pick_up(path, pip, o, out)
             per = vol / cycles
             for _ in range(cycles):
                 out.append(Aspirate(pipette=pip.name, labware=src_lw, well=src_well, volume_ul=per, origin=o))
                 out.append(Dispense(pipette=pip.name, labware=dst_lw, well=dst_well, volume_ul=per, origin=o))
-            out.append(DropTip(pipette=pip.name, origin=o))
+            if path.scope is None:
+                out.append(DropTip(pipette=pip.name, origin=o))
         else:
             vol = op.inputs[0].volume_ul
             pip, _ = self.pipette(vol, False, o)
             lw, well = self.address(op.inputs[0].loc, o)
-            rack, tip_well = self.tip(deck, pip, o)
-            out.append(PickUpTip(pipette=pip.name, rack=rack, well=tip_well, origin=o))
+            self.pick_up(path, pip, o, out)
             out.append(MixOp(pipette=pip.name, labware=lw, well=well, volume_ul=vol, repetitions=op.repetitions or 1, origin=o))
-            out.append(DropTip(pipette=pip.name, origin=o))
+            if path.scope is None:
+                out.append(DropTip(pipette=pip.name, origin=o))
+
+    def pick_up(self, path: _Path, pip: Pipette, origin: Origin, out: list[PirL]) -> None:
+        """A fresh tip per step outside a with_tip; inside one, a tip on the first step only —
+        the named tip's own position if it has been picked up before."""
+        if path.scope is None:
+            rack, well = self.tip(path.deck, pip, origin)
+            out.append(PickUpTip(pipette=pip.name, rack=rack, well=well, origin=origin))
+            return
+        if path.held is not None:
+            return
+        known = path.named.get(path.scope)
+        rack, well = known if known is not None else self.tip(path.deck, pip, origin)
+        path.named[path.scope] = (rack, well)
+        path.held = (pip.name, rack, well)
+        out.append(PickUpTip(pipette=pip.name, rack=rack, well=well, origin=origin))
 
     def pipette(self, vol: float, allow_split: bool, origin: Origin) -> tuple[Pipette, int]:
         found = self.world.hardware.pipette_for(vol, allow_split)

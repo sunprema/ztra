@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from ztra.lower import Aspirate, Decide, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, Program, Segment
+from ztra.lower import Aspirate, Decide, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, Program, ReturnTip, Segment
 from ztra.world import World
 from ztra.world.hardware import RobotModel, fmt
 from ztra.world.inventory import total_ul
@@ -66,8 +66,16 @@ def emit_segment(world: World, program: Program, index: int, seg: Segment) -> st
             lines.append(f'    {_pip(op.pipette)}.mix({op.repetitions}, {fmt(op.volume_ul)}, {_var(op.labware)}["{op.well}"])')
         elif isinstance(op, DropTip):
             lines.append(f"    {_pip(op.pipette)}.drop_tip()")
+        elif isinstance(op, ReturnTip):
+            lines.append(f"    {_pip(op.pipette)}.return_tip()")
         elif isinstance(op, Pause):
             lines.append(f"    ctx.pause({_py_str(op.message)})")
+            if op.replenish_rack is not None:
+                # the vendor's own tip tracker must forget the old rack too
+                labware = world.deck.tip_racks[op.replenish_rack].labware if op.replenish_rack in world.deck.tip_racks else None
+                for p in hw.pipettes:
+                    if labware in p.tip_labware:
+                        lines.append(f"    {_pip(p.name)}.reset_tipracks()")
         elif isinstance(op, Delay):
             lines.append(f"    ctx.delay(seconds={fmt(op.seconds)})")
         elif isinstance(op, ObserveL):
