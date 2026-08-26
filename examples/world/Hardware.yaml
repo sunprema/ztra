@@ -29,6 +29,18 @@ labware:
     cols: 6
     well_max_ul: 1500
     height_mm: 43.0
+  nest_12_reservoir_15ml:
+    kind: reservoir
+    rows: 1
+    cols: 12
+    well_max_ul: 15000
+    height_mm: 31.4
+  nest_1_reservoir_195ml:
+    kind: reservoir
+    rows: 1
+    cols: 1
+    well_max_ul: 195000
+    height_mm: 31.4
   opentrons_96_tiprack_300ul:
     kind: tip_rack
     rows: 8

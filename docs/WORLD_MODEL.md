@@ -41,11 +41,18 @@ vials:
     consumed: false             # optional; one-way (FR-1.3)
 plates:
   <plate_id>:
-    labware: <labware_id>       # must be kind: plate in Hardware.labware
+    labware: <labware_id>       # kind: plate (8x12) or kind: reservoir (any grid) in Hardware.labware
     wells:                      # sparse; unlisted wells are empty
       A1:
         - { reagent: <reagent_id>, volume_ul: 50 }
+  WASTE:
+    labware: nest_1_reservoir_195ml
+    waste: true                 # a liquid waste: receives anything, nothing can be drawn back (E_WASTE_SOURCE)
 ```
+
+Reservoirs (troughs) are plates with a different grid and are addressed the same way in protocols
+(`{ plate: RES1, well: A1 }`); a 12-channel trough is `A1..A12`. Hazard rules apply to the waste too: acid
+and base may not meet there either.
 
 ### The mixture model
 
@@ -110,7 +117,7 @@ pipettes:
       random_ul: 0.5            #   plus scatter in µL
 labware:                        # the catalog; CON-2 comes from well_max_ul
   <labware_id>:
-    kind: plate | tube_rack | tip_rack
+    kind: plate | reservoir | tube_rack | tip_rack   # reservoir: a trough of any grid (1x1, 1x12)
     rows: 8
     cols: 12
     well_max_ul: 360            # required for plate / tube_rack
@@ -149,7 +156,8 @@ world unusable; warnings describe a legal but probably unintended state.
 | `W_LABWARE_UNKNOWN` | E | plate / rack / tip rack references labware not in the catalog |
 | `W_LABWARE_KIND` | E | labware kind does not match its role |
 | `W_LABWARE_GRID` / `W_LABWARE_HEIGHT` / `W_LABWARE_CAPACITY` / `W_LABWARE_TIP_VOLUME` | E | malformed labware definition |
-| `W_PLATE_NOT_96` | E | plate is not 8×12 (CON-1) |
+| `W_PLATE_NOT_96` | E | a `kind: plate` is not 8×12 (CON-1); reservoirs may have any grid |
+| `W_WASTE_NOT_RESERVOIR` | W | `waste: true` on something other than a reservoir |
 | `W_WELL_INVALID` | E | well name outside the labware grid |
 | `W_WELL_OVERFLOW` | E | recorded contents exceed `well_max_ul` (CON-2) |
 | `W_HAZARD_MIX` | W | a well already holds incompatible hazard classes |

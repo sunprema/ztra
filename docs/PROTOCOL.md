@@ -23,7 +23,7 @@ steps:
     vial: V_enzyme                          # frozen → thawed, freeze_thaw_cycles += 1
 
   - op: transfer
-    from: { vial: V_water }                 # a Loc: { vial: id } or { plate: id, well: A1 }
+    from: { vial: V_water }                 # a Loc: { vial: id } or { plate: id, well: A1 }; reservoirs are addressed as plates
     to:   { plate: P1, well: B1 }
     volume_ul: 50                           # one fresh tip per transfer
 
@@ -147,6 +147,7 @@ must match (`E_PROTOCOL_VERSION`).
 | `E_OVERFLOW` | destination over labware capacity |
 | `E_HAZARD` | incompatible MSDS classes meeting in one vessel |
 | `E_MIXTURE_IN_VIAL` | a second reagent into a vial |
+| `E_WASTE_SOURCE` | aspirating or mixing in a waste reservoir; what went in is gone |
 | `E_TIPS` | no free compatible tip on the deck |
 
 Every error carries `step_path` (AST path), `iterations` (one per enclosing `repeat`/`for_wells`/`for_each`), `bindings` on each PIR op's origin (what each variable stood for), `branch_path`,

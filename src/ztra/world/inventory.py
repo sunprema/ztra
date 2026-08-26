@@ -83,8 +83,12 @@ class Liquid(Strict):
 
 
 class Plate(Strict):
-    labware: str  # name from the labware catalog; must be a plate
+    """A plate or a reservoir: labware with wells that hold liquid. A reservoir marked
+    `waste` only receives; nothing may be drawn back out of it."""
+
+    labware: str  # name from the labware catalog; kind plate or reservoir
     wells: dict[str, list[Liquid]] = Field(default_factory=dict)  # only non-empty wells are listed
+    waste: bool = False
 
 
 class Inventory(Strict):

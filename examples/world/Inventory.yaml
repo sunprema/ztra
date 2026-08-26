@@ -16,6 +16,8 @@ reagents:
   enzyme_x:
     hazard: inert
     concentration: "10 U/uL"
+  wash_buffer:
+    hazard: inert
 
 vials:
   V_water:
@@ -39,3 +41,11 @@ plates:
     wells:
       A1:
         - { reagent: water, volume_ul: 50 }
+  RES1:                       # a 12-channel trough of wash buffer, addressed like a 1x12 plate
+    labware: nest_12_reservoir_15ml
+    wells:
+      A1:
+        - { reagent: wash_buffer, volume_ul: 12000 }
+  WASTE:                      # liquid waste: receives anything, gives nothing back
+    labware: nest_1_reservoir_195ml
+    waste: true

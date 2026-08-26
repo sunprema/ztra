@@ -70,6 +70,7 @@ class Pipette(Strict):
 
 class LabwareKind(str, Enum):
     plate = "plate"
+    reservoir = "reservoir"  # troughs: a few big wells, for bulk reagent or liquid waste
     tube_rack = "tube_rack"
     tip_rack = "tip_rack"
 

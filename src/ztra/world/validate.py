@@ -115,8 +115,8 @@ def _hardware(c: _Ctx) -> None:
             c.error("W_LABWARE_GRID", f, p, "rows and cols must be >= 1", "check the labware definition")
         if d.height_mm <= 0:
             c.error("W_LABWARE_HEIGHT", f, p, "height_mm must be > 0", "needed for deck clearance checks")
-        if d.kind in (LabwareKind.plate, LabwareKind.tube_rack) and not (d.well_max_ul is not None and d.well_max_ul > 0):
-            c.error("W_LABWARE_CAPACITY", f, p, "plates and tube racks need well_max_ul > 0", "add well_max_ul")
+        if d.kind in (LabwareKind.plate, LabwareKind.reservoir, LabwareKind.tube_rack) and not (d.well_max_ul is not None and d.well_max_ul > 0):
+            c.error("W_LABWARE_CAPACITY", f, p, "plates, reservoirs and tube racks need well_max_ul > 0", "add well_max_ul")
         if d.kind is LabwareKind.tip_rack and not (d.tip_volume_ul is not None and d.tip_volume_ul > 0):
             c.error("W_LABWARE_TIP_VOLUME", f, p, "tip racks need tip_volume_ul > 0", "add tip_volume_ul")
 
@@ -203,11 +203,13 @@ def _inventory(c: _Ctx) -> None:
         if d is None:
             c.error("W_LABWARE_UNKNOWN", f, p, f"labware '{plate.labware}' is not in the catalog", "add it to Hardware.labware")
             continue
-        if d.kind is not LabwareKind.plate:
-            c.error("W_LABWARE_KIND", f, p, f"labware '{plate.labware}' is {d.kind.value}, expected plate", "use a plate definition")
+        if d.kind not in (LabwareKind.plate, LabwareKind.reservoir):
+            c.error("W_LABWARE_KIND", f, p, f"labware '{plate.labware}' is {d.kind.value}, expected plate or reservoir", "use a plate or reservoir definition")
             continue
-        if (d.rows, d.cols) != (8, 12):
-            c.error("W_PLATE_NOT_96", f, p, f"plate is {d.rows}x{d.cols}; v0.1 supports SBS 96-well only", "use an 8x12 plate")
+        if d.kind is LabwareKind.plate and (d.rows, d.cols) != (8, 12):
+            c.error("W_PLATE_NOT_96", f, p, f"plate is {d.rows}x{d.cols}; v0.1 supports SBS 96-well only", "use an 8x12 plate, or kind: reservoir for troughs")
+        if plate.waste and d.kind is not LabwareKind.reservoir:
+            c.warn("W_WASTE_NOT_RESERVOIR", f, p, "a liquid waste is normally a reservoir", "use a reservoir labware, or drop waste: true")
         cap = d.well_max_ul if d.well_max_ul is not None else float("inf")
         for well, contents in plate.wells.items():
             wp = f"{p}.wells.{well}"

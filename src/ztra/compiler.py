@@ -377,6 +377,8 @@ class _Checker:
                 raise self.err(st, "E_VOLUME", origin, "cannot aspirate more than is present", loc.vial, f">= {fmt(vol)} uL", f"{fmt(vial.volume_ul)} uL", "reduce the volume or add another source vial")
             return _Taken([Liquid(reagent=vial.reagent, volume_ul=vol)], vial.reagent)
         _, contents = self.well(st, origin, loc.plate, loc.well)
+        if st.world.inventory.plates[loc.plate].waste:
+            raise self.err(st, "E_WASTE_SOURCE", origin, "liquid in the waste is gone; nothing can be drawn from it", loc.plate, "a plate, reservoir or vial", "a waste reservoir", "aspirate from somewhere else", coordinate=loc.well)
         total = total_ul(contents)
         if total + EPS < vol:
             raise self.err(st, "E_VOLUME", origin, "cannot aspirate more than is present", f"{loc.plate}:{loc.well}", f">= {fmt(vol)} uL", f"{fmt(total)} uL", "reduce the volume", coordinate=loc.well)

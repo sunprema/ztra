@@ -15,6 +15,7 @@ from ztra.protocol import Protocol
 from ztra.schedule import Budget
 from ztra.world import World
 from ztra.world.coords import WellCoord
+from ztra.world.hardware import LabwareKind
 from ztra.world.inventory import ThermalState, describe_mixture, total_ul
 
 PALETTE = ["#4C78A8", "#F58518", "#54A24B", "#B279A2", "#E45756", "#72B7B2", "#EECA3B", "#9D755D"]
@@ -43,11 +44,14 @@ def _grid_header(rows: int, cols: int) -> tuple[list[str], int, int] :
 
 def plate_svg(world: World, plate_id: str) -> str:
     """One plate as a well grid; each well's circle grows with its volume and takes
-    the color of whatever reagent dominates it. Hover a well for its contents."""
+    the color of whatever reagent dominates it. Hover a well for its contents.
+    A reservoir is drawn as troughs that fill from the bottom."""
     plate = world.inventory.plates[plate_id]
     d = world.hardware.labware[plate.labware]
     cap = d.well_max_ul or 360.0
     colors = reagent_colors(world)
+    if d.kind is LabwareKind.reservoir:
+        return _reservoir_svg(world, plate_id, cap, colors)
     parts, ox, oy = _grid_header(d.rows, d.cols)
     rmax = CELL / 2 - 3
     for r in range(d.rows):
@@ -64,6 +68,28 @@ def plate_svg(world: World, plate_id: str) -> str:
                 parts.append(f'<circle cx="{cx}" cy="{cy}" r="{radius:.1f}" fill="{colors.get(dominant, "#888")}"><title>{name}: {tip}</title></circle>')
     w, h = ox + d.cols * CELL + 4, oy + d.rows * CELL + 4
     return f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
+
+
+def _reservoir_svg(world: World, plate_id: str, cap: float, colors: dict[str, str]) -> str:
+    plate = world.inventory.plates[plate_id]
+    d = world.hardware.labware[plate.labware]
+    tw, th, gap = (max(26, 300 // d.cols), 60, 4)
+    parts = []
+    for c in range(d.cols):
+        name = WellCoord(0, c).name
+        x, y = 4 + c * (tw + gap), 4
+        contents = plate.wells.get(name, [])
+        vol = total_ul(contents)
+        parts.append(f'<rect x="{x}" y="{y}" width="{tw}" height="{th}" rx="3" fill="#F7F7F7" stroke="#CCC"><title>{name}: empty</title></rect>')
+        if vol > 0:
+            dominant = max(contents, key=lambda l: l.volume_ul).reagent
+            h = max(2.0, th * min(1.0, vol / cap))
+            tip = f"{vol:g} uL: " + html.escape(describe_mixture(contents, world.inventory.reagents))
+            parts.append(f'<rect x="{x}" y="{y + th - h:.1f}" width="{tw}" height="{h:.1f}" rx="3" fill="{colors.get(dominant, "#888")}"><title>{name}: {tip}</title></rect>')
+        parts.append(f'<text x="{x + tw / 2}" y="{y + th + 12}" text-anchor="middle" fill="#999" font-size="9">{name}</text>')
+    label = " (waste)" if plate.waste else ""
+    w, h = 8 + d.cols * (tw + gap) - gap, th + 22
+    return f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg"><title>{html.escape(plate_id)}{label}</title>{"".join(parts)}</svg>'
 
 
 def tip_rack_svg(world: World, rack_id: str) -> str:

@@ -7,6 +7,8 @@ slots:
   "1": { entity: P1 }
   "2": { entity: TR1 }
   "3": { entity: TIPS1 }
+  "4": { entity: RES1 }
+  "5": { entity: WASTE }
   "12": { trash: true }
 
 tube_racks:

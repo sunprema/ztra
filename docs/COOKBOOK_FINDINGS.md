@@ -27,10 +27,12 @@ workflow that needs them all. Sizes: S = a day or less, M = days, L = a week-sca
    own volume. Now `for_each` (PROTOCOL.md): a list of items, `$row.well` / `$row.volume_ul` /
    `$row.source` in the body, every row compiled. Kills the entire CSV/`is_simulating()` machinery: the
    table lives in the versioned protocol. Example: `examples/protocols/volume_gradient.yaml`.
-2. **Reservoirs and a waste container (M).** Wash protocols draw from troughs
-   (`nest_1_reservoir_195ml`, 12-channel reservoirs) and dump supernatant into a liquid waste. The world
-   model insists plates are 8×12 and has no reservoir or waste concept. New labware kinds plus linker/
-   lowering addressing; prerequisite for the wash workflow.
+2. **Reservoirs and a waste container (M) — done 2026-08-26.** Wash protocols draw from troughs
+   (`nest_1_reservoir_195ml`, 12-channel reservoirs) and dump supernatant into a liquid waste. Now a
+   labware kind `reservoir` (any grid) usable under `Inventory.plates` and addressed like a plate, and
+   `waste: true` on a reservoir: it receives anything (hazard rules still apply) and `E_WASTE_SOURCE`
+   refuses to draw from it. The example world and `ztra init` carry a waste; the example world also has a
+   12-channel trough of wash buffer.
 3. **A timed `delay` step (S).** Incubations ("3 minutes on the magnet") are load-bearing steps with no
    ztra representation. Lowers to `ctx.delay`; the cost model already folds time.
 4. **Tip economy (M).** Recipes reuse tips deliberately (`return_tip()`, per-well tips kept across wash

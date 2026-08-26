@@ -93,7 +93,7 @@ def test_slot_names_follow_robot_model(world: World) -> None:
     w = World.load(EXAMPLES / "world")
     w.hardware.robot.model = RobotModel.flex
     e2 = errors(w)
-    assert sum(1 for i in e2 if i.code == "W_SLOT_INVALID") == 4
+    assert sum(1 for i in e2 if i.code == "W_SLOT_INVALID") == 6  # slots 1-5 and 12 are OT-2 names
     assert "W_TRASH_SLOT" not in codes(e2)
     assert "W_PIPETTE_ROBOT_MISMATCH" in codes(e2), "an OT-2 pipette on a Flex"
 

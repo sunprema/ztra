@@ -40,6 +40,11 @@ plates:
   P1:
     labware: corning_96_wellplate_360ul_flat   # must be in Hardware.yaml's catalog
     wells: {}
+  # Reservoirs (troughs) live here too, addressed like plates: { plate: WASTE, well: A1 }.
+  # A waste reservoir only receives liquid; the compiler refuses to draw from it.
+  WASTE:
+    labware: nest_1_reservoir_195ml
+    waste: true
 '''
 
 DECK = '''\
@@ -55,7 +60,8 @@ slots:
   "1":  { entity: P1 }      # the plate from Inventory.yaml
   "2":  { entity: TR1 }     # the tube rack holding the vials
   "3":  { entity: TIPS1 }   # pipette tips
-  "12": { trash: true }
+  "4":  { entity: WASTE }   # liquid waste (a reservoir)
+  "12": { trash: true }     # where used tips go
 
 tube_racks:
   TR1:
@@ -116,6 +122,12 @@ labware:
     cols: 12
     tip_volume_ul: 300
     height_mm: 64.7
+  nest_1_reservoir_195ml:   # a trough; reservoirs may have any grid (this one is 1x1)
+    kind: reservoir
+    rows: 1
+    cols: 1
+    well_max_ul: 195000
+    height_mm: 31.4
 
 sensors:
   # What you can measure, and how noisy it is (sigma). The report after a run
