@@ -33,8 +33,8 @@ workflow that needs them all. Sizes: S = a day or less, M = days, L = a week-sca
    `waste: true` on a reservoir: it receives anything (hazard rules still apply) and `E_WASTE_SOURCE`
    refuses to draw from it. The example world and `ztra init` carry a waste; the example world also has a
    12-channel trough of wash buffer.
-3. **A timed `delay` step (S).** Incubations ("3 minutes on the magnet") are load-bearing steps with no
-   ztra representation. Lowers to `ctx.delay`; the cost model already folds time.
+3. **A timed `delay` step (S) — done 2026-08-26.** Incubations ("3 minutes on the magnet") are load-bearing
+   steps. `delay {seconds, minutes}` is costed, lowers to `ctx.delay`, and is accepted by the vendor engine.
 4. **Tip economy (M).** Recipes reuse tips deliberately (`return_tip()`, per-well tips kept across wash
    rounds) and replenish racks mid-run (`pause` + `reset_tipracks()`). ztra is fresh-tip-only, so a real
    wash protocol would burn racks the deck cannot hold. Needs a tip-reuse strategy in lowering, and a

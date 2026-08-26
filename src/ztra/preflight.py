@@ -64,7 +64,7 @@ def preflight(world: World, protocol: Protocol, budget: Budget | None = None) ->
         wells: dict[tuple[str, str], float] = {(pid, w): total_ul(c) for pid, p in inv.plates.items() for w, c in p.wells.items()}
         thawed = {vid for vid, v in inv.vials.items() if v.state is ThermalState.thawed}
         for op in ops:
-            if isinstance(op, ObserveOp):
+            if isinstance(op, ObserveOp) or op.kind is TransformKind.delay:
                 continue
             vol = op.inputs[0].volume_ul
             if op.kind is TransformKind.thaw:

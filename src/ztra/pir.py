@@ -31,6 +31,7 @@ class TransformKind(str, Enum):
     thaw = "thaw"
     transfer = "transfer"
     mix = "mix"
+    delay = "delay"  # time passes, nothing moves (an incubation)
 
 
 class Transform(Strict):
@@ -39,6 +40,7 @@ class Transform(Strict):
     inputs: list[Port]
     outputs: list[Port]
     repetitions: int | None = None
+    seconds: float | None = None  # delay only
     origin: Origin
 
 

@@ -17,6 +17,7 @@ ztra lower <world_dir> <protocol.yaml> --out <dir>  → writes program.json + se
 | `transform transfer A → B, v µL` | `pick_up_tip`, then ⌈v / max⌉ × (`aspirate`, `dispense`) of equal volume, then `drop_tip` |
 | `transform mix at W, v µL × n` | `pick_up_tip`, `mix`, `drop_tip` |
 | `observe sensor` | `observe` (robot pauses; the telemetry service reads) |
+| `transform delay` | `delay seconds` (the robot waits on its own) |
 | `branch` | a segment boundary — see §2 |
 
 Along the way it:
@@ -28,7 +29,7 @@ Along the way it:
 - **picks tips** the same way the compiler does (column-major, racks in id order, placed racks only), so the
   tip wells in the vendor code match the predicted world's `tip_racks.used`. Error: `E_TIPS`.
 
-PIR-L ops: `pick_up_tip`, `aspirate`, `dispense`, `mix`, `drop_tip`, `pause`, `observe`. Every op keeps
+PIR-L ops: `pick_up_tip`, `aspirate`, `dispense`, `mix`, `drop_tip`, `pause`, `observe`, `delay`. Every op keeps
 its `origin` (protocol step and loop iteration), and the backend writes it as a comment above the code.
 
 ## 2. Segments

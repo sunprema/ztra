@@ -16,6 +16,7 @@ from ztra.schedule import Budget, schedule
 from ztra.protocol import (
     PROTOCOL_VERSION,
     Condition,
+    Delay,
     ForEach,
     ForWells,
     IfObserved,
@@ -57,6 +58,7 @@ class Cost:
     transfers: int = 0
     aspirations: int = 0  # aspirate/dispense cycles; more than transfers when a volume had to be split
     mixes: int = 0
+    delays: int = 0
     tips_used: int = 0
     observations: int = 0
     reagent_consumed_ul: dict[str, float] = field(default_factory=dict)  # stock drawn from vials, per reagent
@@ -209,6 +211,11 @@ class _Unroller:
             elif isinstance(step, Mix):
                 port = Port(loc=self.bind(step.at, origin), volume_ul=self.volume(step.volume_ul, origin))
                 out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, origin=origin))
+            elif isinstance(step, Delay):
+                seconds = step.seconds + 60.0 * step.minutes
+                if not seconds > 0:
+                    raise CompileError("E_DELAY", "a delay must last a positive time", "delay", "> 0 s", f"{fmt(seconds)} s", "give seconds and/or minutes", origin=origin)
+                out.append(Transform(kind=TransformKind.delay, inputs=[], outputs=[], seconds=seconds, origin=origin))
             elif isinstance(step, Repeat):
                 if step.times == 0:
                     raise CompileError("E_LOOP_BOUND", "a repeat must run at least once", "repeat", ">= 1", "0", "remove the loop or set times >= 1", origin=origin)
@@ -342,6 +349,11 @@ class _Checker:
             st.cost.estimated_time_s += cycles * self.cost_model.seconds_per_aspiration_cycle + self.cost_model.seconds_per_tip_change
             plural = "s" if cycles > 1 else ""
             st.trace.append(f"transfer {fmt(vol)} uL {loc_str(src)} -> {loc_str(dst)} with {pipette.name} ({cycles} cycle{plural}), tip {tip}")
+        elif op.kind is TransformKind.delay:
+            seconds = op.seconds or 0.0
+            st.cost.delays += 1
+            st.cost.estimated_time_s += seconds
+            st.trace.append(f"wait {fmt(seconds)} s")
         else:
             at, vol = op.inputs[0].loc, op.inputs[0].volume_ul
             pipette, _ = self.choose_pipette(st, origin, vol, allow_split=False)

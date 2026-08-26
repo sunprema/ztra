@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from ztra.lower import Aspirate, Decide, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, Program, Segment
+from ztra.lower import Aspirate, Decide, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, Program, Segment
 from ztra.world import World
 from ztra.world.hardware import RobotModel, fmt
 from ztra.world.inventory import total_ul
@@ -68,6 +68,8 @@ def emit_segment(world: World, program: Program, index: int, seg: Segment) -> st
             lines.append(f"    {_pip(op.pipette)}.drop_tip()")
         elif isinstance(op, Pause):
             lines.append(f"    ctx.pause({_py_str(op.message)})")
+        elif isinstance(op, Delay):
+            lines.append(f"    ctx.delay(seconds={fmt(op.seconds)})")
         elif isinstance(op, ObserveL):
             lines.append(f"    ctx.pause({_py_str(f'OBSERVE {op.label}: waiting for {op.sensor}')})")
     return "\n".join(lines) + "\n"

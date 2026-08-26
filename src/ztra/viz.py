@@ -10,7 +10,7 @@ import itertools
 from dataclasses import dataclass
 
 from ztra.diff import Verdict, WorldDiff
-from ztra.lower import Aspirate, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, PirL, lower
+from ztra.lower import Aspirate, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, PirL, lower
 from ztra.protocol import Protocol
 from ztra.schedule import Budget
 from ztra.world import World
@@ -276,6 +276,8 @@ def describe_op(world: World, op: PirL) -> str:
         return op.message
     if isinstance(op, ObserveL):
         return f"read {op.sensor} ({op.label})"
+    if isinstance(op, Delay):
+        return f"wait {op.seconds:g} s"
     return op.op
 
 

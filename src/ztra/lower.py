@@ -81,7 +81,15 @@ class ObserveL(Strict):
     origin: Origin
 
 
-PirL = Annotated[Union[PickUpTip, Aspirate, Dispense, MixOp, DropTip, Pause, ObserveL], Field(discriminator="op")]
+class Delay(Strict):
+    """Robot waits a fixed time on its own."""
+
+    op: Literal["delay"] = "delay"
+    seconds: float
+    origin: Origin
+
+
+PirL = Annotated[Union[PickUpTip, Aspirate, Dispense, MixOp, DropTip, Pause, ObserveL, Delay], Field(discriminator="op")]
 
 
 class Halt(Strict):
@@ -172,6 +180,8 @@ class _Lowerer:
         o = op.origin
         if op.kind is TransformKind.thaw:
             out.append(Pause(message=f"Thaw {loc_str(op.inputs[0].loc)} and resume", origin=o))
+        elif op.kind is TransformKind.delay:
+            out.append(Delay(seconds=op.seconds or 0.0, origin=o))
         elif op.kind is TransformKind.transfer:
             vol = op.inputs[0].volume_ul
             pip, cycles = self.pipette(vol, True, o)

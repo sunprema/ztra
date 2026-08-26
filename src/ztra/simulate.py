@@ -108,6 +108,8 @@ def _run(base: World, ops: list[Transform | ObserveOp], rng: random.Random | Non
         if isinstance(op, ObserveOp):
             run.readings.append(read(run.world, op.sensor, op.label))
             continue
+        if op.kind is TransformKind.delay:
+            continue  # nothing moves while waiting
         if op.kind is TransformKind.thaw:
             loc = op.inputs[0].loc
             assert isinstance(loc, VialLoc)

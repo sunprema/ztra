@@ -73,6 +73,14 @@ class Mix(Strict):
     repetitions: int = 3
 
 
+class Delay(Strict):
+    """Wait — an incubation, a settle, beads on the magnet. Seconds and minutes add up."""
+
+    op: Literal["delay"]
+    seconds: float = 0
+    minutes: float = 0
+
+
 class Repeat(Strict):
     """Run the body a fixed number of times."""
 
@@ -121,7 +129,7 @@ class IfObserved(Strict):
     otherwise: list[Step] = Field(default_factory=list)
 
 
-Step = Annotated[Union[Thaw, Transfer, Mix, Repeat, ForWells, ForEach, Observe, IfObserved], Field(discriminator="op")]
+Step = Annotated[Union[Thaw, Transfer, Mix, Delay, Repeat, ForWells, ForEach, Observe, IfObserved], Field(discriminator="op")]
 
 Repeat.model_rebuild()
 ForWells.model_rebuild()

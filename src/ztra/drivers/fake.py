@@ -9,7 +9,7 @@ from typing import Literal
 
 from ztra.compiler import deposit_liquid, remove_liquid, take_liquids
 from ztra.driver import DriverFault, Hooks
-from ztra.lower import Aspirate, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, Segment
+from ztra.lower import Aspirate, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, Segment
 from ztra.protocol import Loc, VialLoc, WellLoc
 from ztra.world import World
 from ztra.world.inventory import Liquid, ThermalState, total_ul
@@ -82,6 +82,8 @@ class FakeDriver:
             elif isinstance(op, ObserveL):
                 log.append(f"Pausing for reading {op.label} ({op.sensor})")
                 hooks.on_observe(op, i)
+            elif isinstance(op, Delay):
+                log.append(f"Delaying for {op.seconds:g} seconds")  # the fake lab does not actually wait
             hooks.on_op_done(i)
         log.append(f"[fake] segment {index} done")
         return log

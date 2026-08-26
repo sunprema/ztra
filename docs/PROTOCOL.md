@@ -32,6 +32,10 @@ steps:
     volume_ul: 100
     repetitions: 5                          # default 3; one fresh tip
 
+  - op: delay                               # wait: an incubation, beads settling
+    minutes: 3                              # seconds and minutes add up; must be > 0
+    seconds: 0
+
   - op: repeat                              # static bound, fully unrolled
     times: 3
     body: [ ...steps... ]
@@ -114,6 +118,7 @@ Per-step transitions and checks:
 | `for_each` | items non-empty (`E_LOOP_BOUND`), variable not already bound; every `$name.column` used exists (`E_UNBOUND_VARIABLE`) and has the right kind of value (`E_VARIABLE_TYPE`) | body unrolled once per item with `$name.column` substituted; the values land in each op's `origin.bindings` |
 | `transfer` | volume > 0 and ≥ smallest pipette min (`E_PIPETTE_RANGE`); source exists, not consumed (`E_CONSUMED`), thawed if a vial (`E_STATE`), holds ≥ volume (`E_VOLUME`); destination exists (`E_UNKNOWN_ENTITY`, `E_COORDINATE`), has capacity (`E_OVERFLOW`), no incompatible hazard classes meet (`E_HAZARD`), vial destination holds the same reagent (`E_MIXTURE_IN_VIAL`); a free compatible tip exists on the deck (`E_TIPS`) | liquid moves (mixtures move proportionally); a source vial reaching 0 becomes `consumed`; one tip is marked used; stock consumption is costed |
 | `mix` | volume within one pipette's range (no splitting), the well holds ≥ volume, a free tip | one tip used; contents unchanged |
+| `delay` | duration > 0 (`E_DELAY`) | nothing moves; cost += the wait |
 | `observe` | sensor exists (`E_UNKNOWN_SENSOR`) | none; cost += `read_time_s` |
 | `if_observed` | label observed earlier on this path (`E_UNKNOWN_OBSERVATION`) | fork |
 
@@ -148,6 +153,7 @@ must match (`E_PROTOCOL_VERSION`).
 | `E_HAZARD` | incompatible MSDS classes meeting in one vessel |
 | `E_MIXTURE_IN_VIAL` | a second reagent into a vial |
 | `E_WASTE_SOURCE` | aspirating or mixing in a waste reservoir; what went in is gone |
+| `E_DELAY` | a delay must last a positive time |
 | `E_TIPS` | no free compatible tip on the deck |
 
 Every error carries `step_path` (AST path), `iterations` (one per enclosing `repeat`/`for_wells`/`for_each`), `bindings` on each PIR op's origin (what each variable stood for), `branch_path`,
@@ -163,7 +169,7 @@ a thaw — worst case across branch paths. Resource-related compile errors (`E_V
 
 ## 6. Cost model (NFR-5.2)
 
-`estimated_time_s` = aspiration cycles × 12 s + tip changes × 4 s + mix repetitions × 2 s + Σ sensor
+`estimated_time_s` = aspiration cycles × 12 s + tip changes × 4 s + mix repetitions × 2 s + Σ delays + Σ sensor
 `read_time_s`. Constants live in `CostModel` and are placeholders until measured on the robot. Thaw time is
 not modelled.
 
