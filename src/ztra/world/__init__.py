@@ -95,6 +95,12 @@ class World(Strict):
     def clone(self) -> "World":
         return self.model_copy(deep=True)
 
+    def _repr_html_(self) -> str:
+        """Jupyter shows the bench as a picture instead of a wall of fields."""
+        from ztra.viz import world_html
+
+        return world_html(self)
+
 
 def canonical(data: Any) -> str:
     return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)

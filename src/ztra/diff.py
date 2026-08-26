@@ -53,6 +53,12 @@ class WorldDiff(Strict):
     notes: list[str] = Field(default_factory=list)
     observed_world_hash: str
 
+    def _repr_html_(self) -> str:
+        """Jupyter shows the verdicts as a colored table."""
+        from ztra.viz import diff_html
+
+        return diff_html(self)
+
 
 class DiffError(Exception):
     def __init__(self, code: str, message: str, hint: str = "") -> None:

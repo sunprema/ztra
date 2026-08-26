@@ -93,6 +93,19 @@ ztra compile world protocol.yaml --budget "sensor=scale_1,every=3"
 
 This inserts a reading on the named sensor after every 3 transfers (and one at the end — add `end=false` to skip it). More checkpoints make a run slower but let the diff say *where* it went wrong, not just that it did.
 
+## In a notebook
+
+There are no separate commands for this — ztra is a plain Python library, and in Jupyter its objects draw themselves. No extra dependencies are needed.
+
+| What you write | What you see |
+|---|---|
+| `World.load(Path("world"))` as the last line of a cell | The bench as a picture: deck, plates, tip racks, vial levels. Hover a well for its contents. |
+| a diff report as the last line of a cell | The verdict table in color, one row per reading. `ztra.viz.diff_html(report, world)` adds per-well verdict maps. |
+| `trace(world, protocol)` from `ztra.viz` | A list of frames — the world after every single robot step, replayed with ideal pipettes. |
+| `HTML(animate_html(frames))` | A scrubbable, playable animation of the run, built from those frames. |
+
+[`examples/walkthrough.ipynb`](../examples/walkthrough.ipynb) shows all of it in one page; `scripts/make_walkthrough.py` rebuilds that notebook.
+
 ## For agents: the MCP server
 
 `ztra-mcp` exposes all of the above as tools over MCP (stdio), so an agent like Claude can drive the whole loop — including the structured refusals, which are written to be recovered from. The repo's `.mcp.json` shows the wiring; [MCP.md](MCP.md) lists the tools.

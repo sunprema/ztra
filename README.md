@@ -84,6 +84,12 @@ Your YAML is checked in two layers. First, loading is strict: a misspelled field
 
 When the world matches your bench, `ztra store init world` starts the version history, and you're in the branch → compile → simulate → commit → run loop described above.
 
+## In a notebook
+
+Underneath the CLI, ztra is a plain Python library — and in Jupyter it knows how to draw itself. Evaluating a world in a cell shows the bench as a picture: the deck, each plate with its wells, tip racks, and vials with their fill levels. A diff report renders its verdicts in color. And a protocol can be replayed step by step as a scrubbable animation — watch the wells fill, the vials drain, and the tips get used up, ending on exactly the world the compiler predicted.
+
+[examples/walkthrough.ipynb](examples/walkthrough.ipynb) runs the whole loop in one page, with the outputs saved in.
+
 ## Reading further
 
 [docs/USER_GUIDE.md](docs/USER_GUIDE.md) walks through every command, grouped by the stage of work it belongs to. Beyond that, the `docs/` folder has the details, starting with [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the overall design and [REQUIREMENTS.md](docs/REQUIREMENTS.md) for what v0.1 is meant to do. [PROTOTYPE_FINDINGS.md](docs/PROTOTYPE_FINDINGS.md) records the experiments that shaped the design — including the mistakes.
