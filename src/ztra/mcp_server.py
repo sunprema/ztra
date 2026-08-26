@@ -25,7 +25,9 @@ from ztra.protocol import Protocol
 from ztra.schedule import Budget
 from ztra.sensors import Telemetry
 from ztra.simulate import Noise, simulate
+from ztra.driver import DriverFault
 from ztra.drivers.fake import FakeDriver
+from ztra.drivers.otsim import OpentronsSimDriver
 from ztra.runtime import Runtime
 from ztra.store import EXPECTED_SEEDS, IntentCommit, Store, StoreError, write_world
 from ztra.telemetry import SensorAdapter, SimulatedSensor, TelemetryService
@@ -120,6 +122,8 @@ def _run(fn: Any) -> dict[str, Any]:
     except CompileError as e:
         return {"ok": False, "error": e.to_dict()}
     except (StoreError, DiffError) as e:
+        return {"ok": False, "error": e.to_dict()}
+    except DriverFault as e:
         return {"ok": False, "error": e.to_dict()}
 
 
@@ -379,8 +383,8 @@ def store_execute(
 
 
 @server.tool()
-def run_intent(repo: str, branch: str, approve: bool = False, seed: int = 0, faults: list[str] | None = None, message: str | None = None) -> dict[str, Any]:
-    """Run the branch's head intent on the FAKE lab (no hardware): a pretend robot with realistic pipette error and simulated sensors. Nothing runs unless approve=true. faults like ["0:5:clog", "0:9:door_open"] inject a clogged tip or an opened door at (segment, op). Records the observation (completed or aborted) on main and returns the diff summary."""
+def run_intent(repo: str, branch: str, approve: bool = False, seed: int = 0, faults: list[str] | None = None, message: str | None = None, driver_name: str = "fake") -> dict[str, Any]:
+    """Run the branch's head intent on a simulated lab (no hardware). driver_name "fake" (default) is a pretend robot with realistic pipette error; "otsim" runs each segment inside Opentrons' own simulator and aborts if its tracked volumes disagree with ztra's (needs ZTRA_OT_SIM_OT2/FLEX and apiLevel >= 2.22; ignores seed/faults). Nothing runs unless approve=true. faults like ["0:5:clog", "0:9:door_open"] inject a clogged tip or an opened door at (segment, op). Records the observation (completed or aborted) on main and returns the diff summary."""
 
     def go() -> dict[str, Any]:
         s = _store(repo)
@@ -392,7 +396,11 @@ def run_intent(repo: str, branch: str, approve: bool = False, seed: int = 0, fau
             seg, op, kind = spec.split(":")
             fault_map[(int(seg), int(op))] = kind
         physical = s.get_world(c.base_world)
-        driver = FakeDriver(physical, seed=seed, faults=fault_map)
+        driver: FakeDriver | OpentronsSimDriver
+        if driver_name == "otsim":
+            driver = OpentronsSimDriver(physical)
+        else:
+            driver = FakeDriver(physical, seed=seed, faults=fault_map)
         sensors: dict[str, SensorAdapter] = {sid: SimulatedSensor(lambda: driver.physical, seed=seed + 1) for sid in physical.hardware.sensors}
         rt = Runtime(s, driver, TelemetryService(physical.hardware, sensors), approve=lambda _c, _f: approve)
         return rt.run(branch, message).model_dump(mode="json", exclude_none=True)

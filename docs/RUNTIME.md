@@ -5,8 +5,8 @@ needs hardware sits behind two small interfaces, and a fake implementation of ea
 today.
 
 ```
-ztra run <branch> --yes [--seed N] [--accurate] [--fault SEG:OP:clog|door_open] [-m msg] [-v]
-MCP: run_intent(repo, branch, approve=true, seed, faults, message)
+ztra run <branch> --yes [--driver fake|otsim] [--seed N] [--accurate] [--fault SEG:OP:clog|door_open] [-m msg] [-v]
+MCP: run_intent(repo, branch, approve=true, seed, faults, message, driver_name)
 ```
 
 ## 1. The interfaces
@@ -44,11 +44,21 @@ pretend an instrument misbehaves). Faults: `clog` (a dispense delivers nothing),
    robot op completed** — a transfer interrupted between aspirate and dispense is not counted. The intent counts
    as executed either way; retrying means committing a new intent (which recompiles against the new `main`).
 
-## 4. Not in v1
+## 4. The vendor-simulator lab
+
+`ztra run <branch> --yes --driver otsim` swaps the fake lab for **`OpentronsSimDriver`**: every segment also
+runs inside Opentrons' own simulation engine, in the vendor venv named by `ZTRA_OT_SIM_OT2` / `ZTRA_OT_SIM_FLEX`.
+The engine validates each command exactly as the robot software would and tracks liquid per well (apiLevel ≥ 2.22,
+which the driver requires). At every pause and at the end of each segment, its tracked volumes are compared with
+ztra's own replay; a vendor refusal (`D_VENDOR_REFUSED`) or a volume disagreement (`D_VENDOR_MISMATCH`) aborts
+the run and is recorded like any other fault. A disagreement means a bug in ztra's physics or lowering — the
+vendor engine is an independently written model of the same run. Ideal pipettes, no faults: use the fake driver
+to rehearse failure, this one to cross-check correctness. Segments are re-emitted from the driver's current
+world before dispatch, so a segment after a branch starts from the volumes as they actually stand.
+
+## 5. Not in v1
 
 - Real drivers and adapters (the Opentrons HTTP run-control API is unverified; see OPENTRONS_NOTES.md).
-- An `OpentronsSimDriver` that runs segments inside the vendor's own simulator and reads its tracked volumes —
-  probed and found feasible at apiLevel ≥ 2.22; recorded in OPENTRONS_NOTES.md, not built.
 - Pause handling for a person (`on_pause` is a no-op in the fake).
 - The interlock only knows temperature; door, pressure and collision signals arrive with real hardware.
 - The <50 ms telemetry latency budget is meaningless on a fake and is not measured.

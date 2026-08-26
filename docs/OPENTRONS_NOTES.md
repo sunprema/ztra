@@ -107,13 +107,15 @@ Checked by running code in both packages (opentrons 8.8.2 for OT-2, 9.1.1 for Fl
 *So in ztra:* the compiler's `E_VOLUME` / `E_CONSUMED` / `E_STATE` / `E_HAZARD` / tip checks are additive, not
 redundant — the vendor engine has none of them. Over-dispense is the one check both have.
 
-**Documented option, not built: an `OpentronsSimDriver`.** Same `Driver` interface as the fake: run each
-segment inside the vendor engine (subprocess into the vendor venv, JSON back), read the tracked volumes as
-the "physical" world for the simulated sensors, surface vendor refusals as `DriverFault`. Needs two backend
-changes: worlds at apiLevel ≥ 2.22 and `load_empty` emitted for every well a segment dispenses into. Value:
-a second, vendor-written model of what a healthy run does — any disagreement with ztra's prediction is a bug
-in our physics or lowering. It has ideal pipettes, so it complements the `FakeDriver`, which has noise and
-faults, rather than replacing it. Roughly a day of work.
+**Built 2026-08-26: the `OpentronsSimDriver`** (`ztra run --driver otsim`, `drivers/otsim.py`). Same `Driver`
+interface as the fake: each segment is re-emitted from the driver's current world (so later segments carry the
+right starting volumes), run inside the vendor engine (subprocess into the vendor venv, JSON back), and the
+engine's tracked volumes are compared against ztra's own replay at every pause and at the end — a mismatch or a
+vendor refusal aborts the run as a `DriverFault` (`D_VENDOR_MISMATCH` / `D_VENDOR_REFUSED`). The two backend
+changes went in with it: `load_empty` is emitted for every dispense/mix target from apiLevel ≥ 2.22, and the
+driver requires ≥ 2.22 (`D_API_LEVEL` otherwise). The harness monkeypatches `ctx.pause` to snapshot volumes
+mid-run, which the vendor engine tolerates. Value confirmed: a second, vendor-written model of what a healthy
+run does; ideal pipettes, so it complements the `FakeDriver` (noise, faults) rather than replacing it.
 
 ## Not yet used, worth knowing
 

@@ -44,7 +44,9 @@ def emit_segment(world: World, program: Program, index: int, seg: Segment) -> st
         racks = [_var(rid) for rid, r in world.deck.tip_racks.items() if r.labware in p.tip_labware and world.deck.slot_of(rid) is not None]
         lines.append(f'    {_pip(p.name)} = ctx.load_instrument("{p.name}", "{p.mount.value}", tip_racks=[{", ".join(racks)}])')
 
-    lines += _liquids(world)
+    liquid_lines, declared = _liquids(world)
+    lines += liquid_lines
+    lines += _empties(world, seg, declared, api)
 
     if not seg.ops:
         lines.append('    ctx.comment("nothing to do in this segment")')
@@ -71,10 +73,12 @@ def emit_segment(world: World, program: Program, index: int, seg: Segment) -> st
     return "\n".join(lines) + "\n"
 
 
-def _liquids(world: World) -> list[str]:
-    """Tell the app what is where at the start: one liquid per reagent, volumes per well."""
+def _liquids(world: World) -> tuple[list[str], set[tuple[str, str]]]:
+    """Tell the app what is where at the start: one liquid per reagent, volumes per well.
+    Also returns which (entity, well) addresses were declared."""
     used: dict[str, str] = {}
     loads: list[str] = []
+    declared: set[tuple[str, str]] = set()
     placed = world.deck.placed()
 
     def liquid_var(reagent: str) -> str:
@@ -90,14 +94,37 @@ def _liquids(world: World) -> list[str]:
                 continue
             dominant = max(contents, key=lambda l: l.volume_ul).reagent
             loads.append(f'    {_var(pid)}["{well}"].load_liquid({liquid_var(dominant)}, {fmt(total_ul(contents))})')
+            declared.add((pid, well))
     for vid, link in world.deck.linker.items():
         vial = world.inventory.vials.get(vid)
         if vial is None or vial.volume_ul <= 0 or link.rack not in placed:
             continue
         loads.append(f'    {_var(link.rack)}["{link.well}"].load_liquid({liquid_var(vial.reagent)}, {fmt(vial.volume_ul)})')
+        declared.add((link.rack, link.well))
     # description/display_color must be given explicitly before API 2.20
     defs = [f'    {var} = ctx.define_liquid(name="{reagent}", description=None, display_color=None)' for reagent, var in used.items()]
-    return defs + loads
+    return defs + loads, declared
+
+
+def _empties(world: World, seg: Segment, declared: set[tuple[str, str]], api: str) -> list[str]:
+    """Declare every well this segment dispenses into as empty (load_empty, API 2.22+),
+    so the vendor engine can track liquid in the destinations too."""
+    if not _api_at_least(api, (2, 22)):
+        return []
+    targets: dict[str, list[str]] = {}
+    seen: set[tuple[str, str]] = set(declared)
+    for op in seg.ops:
+        if isinstance(op, (Dispense, MixOp)) and (op.labware, op.well) not in seen:
+            targets.setdefault(op.labware, []).append(op.well)
+            seen.add((op.labware, op.well))
+    return [f'    {_var(entity)}.load_empty([{", ".join(f"{_var(entity)}[\"{w}\"]" for w in wells)}])' for entity, wells in targets.items()]
+
+
+def _api_at_least(api: str, minimum: tuple[int, int]) -> bool:
+    parts = api.split(".")
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        return False
+    return (int(parts[0]), int(parts[1])) >= minimum
 
 
 def _labware_name(world: World, entity: str) -> str:

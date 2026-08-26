@@ -30,6 +30,9 @@
   All store commands take --repo <dir> (default: ./.ztra).
   ztra run <branch> --yes [--seed N] [--accurate] [--fault SEG:OP:clog|door_open ...] [-m msg]
                                          run the branch's head intent on the FAKE driver and record the result
+      --driver otsim   run each segment inside the Opentrons simulator instead (needs
+                       ZTRA_OT_SIM_OT2/FLEX and apiLevel >= 2.22); aborts if the vendor
+                       engine's tracked volumes disagree with ours
 Exit 1 = the core refused (compile/store error), exit 2 = an input could not be loaded.
 """
 
@@ -47,7 +50,9 @@ from ztra.compiler_errors import CompileError
 from ztra.diff import DiffError, diff
 from ztra.lower import lower
 from ztra.preflight import attach, preflight
+from ztra.driver import DriverFault
 from ztra.drivers.fake import FakeDriver
+from ztra.drivers.otsim import OpentronsSimDriver
 from ztra.protocol import Protocol
 from ztra.runtime import Runtime
 from ztra.scaffold import NEXT_STEPS, ScaffoldError, scaffold
@@ -227,7 +232,18 @@ def cmd_run(args: argparse.Namespace) -> int:
         seg, op, kind = spec.split(":")
         faults[(int(seg), int(op))] = kind
     physical = s.get_world(c.base_world)
-    driver = FakeDriver(physical, seed=args.seed, accurate=args.accurate, faults=faults)
+    driver: FakeDriver | OpentronsSimDriver
+    if args.driver == "otsim":
+        if faults:
+            out({"ok": False, "error": {"code": "D_NO_FAULTS", "message": "the vendor-simulator driver has no fault injection", "hint": "use the fake driver for faults"}})
+            return 1
+        try:
+            driver = OpentronsSimDriver(physical)
+        except DriverFault as e:
+            out({"ok": False, "error": e.to_dict()})
+            return 1
+    else:
+        driver = FakeDriver(physical, seed=args.seed, accurate=args.accurate, faults=faults)
     sensors: dict[str, SensorAdapter] = {sid: SimulatedSensor(lambda: driver.physical, seed=args.seed + 1) for sid in physical.hardware.sensors}
     rt = Runtime(s, driver, TelemetryService(physical.hardware, sensors), approve=lambda _c, _f: bool(args.yes))
     result = rt.run(args.branch, args.message)
@@ -363,6 +379,7 @@ def main(argv: list[str] | None = None) -> None:
     rn.add_argument("branch")
     rn.add_argument("--repo", default=STORE_DIR)
     rn.add_argument("--yes", action="store_true", help="approve dispatch (without it nothing runs)")
+    rn.add_argument("--driver", choices=["fake", "otsim"], default="fake", help="otsim runs segments inside the Opentrons simulator (needs ZTRA_OT_SIM_*)")
     rn.add_argument("--seed", type=int, default=0)
     rn.add_argument("--accurate", action="store_true", help="fake lab with perfect pipettes")
     rn.add_argument("--fault", action="append", help="SEG:OP:clog or SEG:OP:door_open")
