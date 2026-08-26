@@ -7,9 +7,9 @@ from __future__ import annotations
 import random
 from typing import Literal
 
-from ztra.compiler import deposit_liquid, remove_liquid, take_liquids
+from ztra.compiler import deposit_liquid, mobile, remove_liquid, take_liquids
 from ztra.driver import DriverFault, Hooks
-from ztra.lower import Aspirate, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, ReturnTip, Segment
+from ztra.lower import Aspirate, Delay, Dispense, DropTip, Magnet, MixOp, ObserveL, Pause, PickUpTip, ReturnTip, Segment
 from ztra.protocol import Loc, VialLoc, WellLoc
 from ztra.world import World
 from ztra.world.inventory import Liquid, ThermalState, total_ul
@@ -89,6 +89,11 @@ class FakeDriver:
                 hooks.on_observe(op, i)
             elif isinstance(op, Delay):
                 log.append(f"Delaying for {op.seconds:g} seconds")  # the fake lab does not actually wait
+            elif isinstance(op, Magnet):
+                m = self.physical.deck.modules.get(op.module)
+                if m is not None:
+                    m.engaged, m.height_mm = op.engaged, (op.height_mm if op.engaged else None)
+                log.append(f"Engaging magnet of {op.module} at {op.height_mm:g} mm" if op.engaged and op.height_mm is not None else f"Disengaging magnet of {op.module}")
             hooks.on_op_done(i)
         log.append(f"[fake] segment {index} done")
         return log
@@ -113,7 +118,7 @@ class FakeDriver:
 def _available(world: World, loc: Loc) -> float:
     if isinstance(loc, VialLoc):
         return world.inventory.vials[loc.vial].volume_ul
-    return total_ul(world.inventory.plates[loc.plate].wells.get(loc.well, []))
+    return total_ul(mobile(world, loc))
 
 
 from ztra.world.hardware import Accuracy  # noqa: E402

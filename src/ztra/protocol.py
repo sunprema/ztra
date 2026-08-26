@@ -115,6 +115,20 @@ class ReplenishTips(Strict):
     rack: str
 
 
+class EngageMagnet(Strict):
+    """Raise the magnet under a plate: magnetic beads pellet, and from then on drawing
+    liquid from that plate takes the supernatant and leaves the beads."""
+
+    op: Literal["engage_magnet"]
+    module: str
+    height_mm: float  # above the labware base; the vendor allows 0..22.5 on the GEN2 module
+
+
+class DisengageMagnet(Strict):
+    op: Literal["disengage_magnet"]
+    module: str
+
+
 class Repeat(Strict):
     """Run the body a fixed number of times."""
 
@@ -163,7 +177,7 @@ class IfObserved(Strict):
     otherwise: list[Step] = Field(default_factory=list)
 
 
-Step = Annotated[Union[Thaw, Transfer, Mix, Delay, WithTip, ReplenishTips, Repeat, ForWells, ForEach, Observe, IfObserved], Field(discriminator="op")]
+Step = Annotated[Union[Thaw, Transfer, Mix, Delay, WithTip, ReplenishTips, EngageMagnet, DisengageMagnet, Repeat, ForWells, ForEach, Observe, IfObserved], Field(discriminator="op")]
 
 WithTip.model_rebuild()
 Repeat.model_rebuild()

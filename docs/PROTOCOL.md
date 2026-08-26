@@ -47,6 +47,12 @@ steps:
   - op: replenish_tips                      # a person swaps in a fresh rack; the robot pauses for it
     rack: TIPS1                             # every position is free again from here on
 
+  - op: engage_magnet                       # raise the magnet under a plate: beads pellet, and drawing
+    module: MAG1                            #   from that plate now takes the supernatant and leaves them
+    height_mm: 6.5                          # above the labware base; 0..22.5 on the GEN2 module
+  - op: disengage_magnet
+    module: MAG1
+
   - op: repeat                              # static bound, fully unrolled
     times: 3
     body: [ ...steps... ]
@@ -124,7 +130,7 @@ outcomes**, one per path, each carrying:
 
 - `conditions` — the branch decisions that lead here (`after_fill: mass_mg >= 215 => true`)
 - `world` and `world_hash` — the predicted world model on that path
-- `cost` — `thaws, transfers, aspirations, mixes, delays, tips_used, tip_racks_replaced, observations, reagent_consumed_ul{}, estimated_time_s` (`tips_used` counts fresh tips: a shared or reused tip counts once)
+- `cost` — `thaws, transfers, aspirations, mixes, delays, tips_used, tip_racks_replaced, module_actions, observations, reagent_consumed_ul{}, estimated_time_s` (`tips_used` counts fresh tips: a shared or reused tip counts once)
 - `trace` — the chain of thought (NFR-5.1)
 
 An unconditional protocol has exactly one outcome. All outcomes are checked; the first violation on any path
@@ -142,6 +148,7 @@ Per-step transitions and checks:
 | `delay` | duration > 0 (`E_DELAY`) | nothing moves; cost += the wait |
 | `with_tip` | not nested (`E_TIP_SCOPE`); inside: one pipette (`E_TIP_PIPETTE`), one source (`E_TIP_CONTAMINATION`) | one tip for the body, taken at the first step; named tips are remembered (rack, well, source) and not taken again |
 | `replenish_tips` | rack exists (`E_UNKNOWN_ENTITY`), not inside a `with_tip` | every position of the rack becomes free; named tips that lived there are forgotten; cost += 1 rack |
+| `engage_magnet` / `disengage_magnet` | module exists (`E_UNKNOWN_ENTITY`); height within 0..22.5 mm (`E_MAGNET_HEIGHT`) | the module's `engaged` state and height change; while engaged, `magnetic` reagents in the plate it holds are not drawn by transfers or mixes (an `E_VOLUME` on such a well says how much is held by the magnet) |
 | `observe` | sensor exists (`E_UNKNOWN_SENSOR`) | none; cost += `read_time_s` |
 | `if_observed` | label observed earlier on this path (`E_UNKNOWN_OBSERVATION`) | fork |
 
@@ -179,6 +186,7 @@ must match (`E_PROTOCOL_VERSION`).
 | `E_DELAY` | a delay must last a positive time |
 | `E_POSITION` | an aspirate/dispense/mix position would leave the well (offset beyond its depth, sideways beyond its radius, wrong sign) |
 | `E_FLOW_RATE` | a flow rate is not positive or exceeds `safe_envelope.max_flow_rate_ul_s` |
+| `E_MAGNET_HEIGHT` | an engage height outside the module's 0..22.5 mm |
 | `E_TIP_SCOPE` | `with_tip` blocks do not nest; no rack swap inside one |
 | `E_TIP_PIPETTE` | every step under one `with_tip` must use the same pipette |
 | `E_TIP_CONTAMINATION` | a shared or named tip may only ever draw from one location |

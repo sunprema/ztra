@@ -31,6 +31,7 @@ def summary(world: World) -> dict[str, Any]:
             for vid, v in world.inventory.vials.items()
         },
         "plates": plates,
+        "modules": {mid: f"{m.kind} in slot {m.slot}" + (f" holding {m.holds}" if m.holds else "") + (f", engaged at {m.height_mm:g} mm" if m.engaged and m.height_mm is not None else ", disengaged") for mid, m in world.deck.modules.items()},
         "tips_free": tips_free,
         "sensors": {sid: f"{s.kind.value} on {s.observes.entity} (sigma {s.sigma} {s.unit})" for sid, s in world.hardware.sensors.items()},
         "hazards": {name: r.hazard.value for name, r in world.inventory.reagents.items()},

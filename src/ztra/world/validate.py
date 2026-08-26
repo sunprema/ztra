@@ -243,7 +243,7 @@ def _deck(c: _Ctx) -> None:
     model = w.hardware.robot.model
 
     seen: dict[str, str] = {}
-    for ns, ids in [("plates", list(w.inventory.plates)), ("tube_racks", list(d.tube_racks)), ("tip_racks", list(d.tip_racks))]:
+    for ns, ids in [("plates", list(w.inventory.plates)), ("tube_racks", list(d.tube_racks)), ("tip_racks", list(d.tip_racks)), ("modules", list(d.modules))]:
         for eid in ids:
             if eid in seen:
                 c.error("W_ENTITY_ID_DUP", f, f"{ns}.{eid}", f"id '{eid}' is also used in {seen[eid]}", "entity ids are global")
@@ -301,8 +301,27 @@ def _deck(c: _Ctx) -> None:
         for ts in trash_slots:
             if ts != fixed:
                 c.error("W_TRASH_SLOT", f, f"slots.{ts}", f"{model.value} has a fixed trash in slot {fixed}", f"move trash to slot {fixed}")
+    module_slots: dict[str, str] = {}
+    for mid, m in d.modules.items():
+        p = f"modules.{mid}"
+        if model is not RobotModel.ot2:
+            c.error("W_MODULE_ROBOT", f, p, "the magnetic module is an OT-2 module; the Flex magnetic block is not modelled yet", "remove the module, or use an OT-2 world")
+        if not model.valid_slot(m.slot):
+            c.error("W_SLOT_INVALID", f, p, f"'{m.slot}' is not a slot on {model.value}", 'OT-2 slots are "1".."12"')
+        if m.slot in d.slots:
+            c.error("W_SLOT_MODULE_CLASH", f, p, f"slot {m.slot} is listed under slots and is also this module's slot", "a module's slot is declared on the module only")
+        if m.slot in module_slots:
+            c.error("W_ENTITY_DUPLICATE_SLOT", f, p, f"module '{module_slots[m.slot]}' is also in slot {m.slot}", "one module per slot")
+        module_slots[m.slot] = mid
+        if m.holds is not None:
+            if m.holds not in w.inventory.plates:
+                c.error("W_MODULE_HOLDS_UNKNOWN", f, p, f"holds '{m.holds}', which is not a plate in Inventory.plates", "a module carries a plate")
+            if m.holds in placed:
+                c.error("W_ENTITY_DUPLICATE_SLOT", f, p, f"'{m.holds}' sits on this module and also in slot {placed[m.holds]}", "place it in one place")
+        if m.height_mm is not None and not 0 <= m.height_mm <= 22.5:
+            c.error("W_MAGNET_HEIGHT", f, p, f"engage height {m.height_mm} mm is outside 0..22.5", "the GEN2 module's range above the labware base")
     for eid in list(w.inventory.plates) + list(d.tube_racks) + list(d.tip_racks):
-        if eid not in placed:
+        if eid not in d.placed():
             c.warn("W_ENTITY_NOT_ON_DECK", f, "slots", f"entity '{eid}' is defined but not placed in any slot", "the robot cannot reach it; place it or accept that protocols touching it will fail lowering")
 
     addresses: dict[tuple[str, str], str] = {}

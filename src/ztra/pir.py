@@ -34,6 +34,7 @@ class TransformKind(str, Enum):
     delay = "delay"  # time passes, nothing moves (an incubation)
     tip = "tip"  # opens or closes a shared-tip scope (with_tip)
     replenish = "replenish"  # a person swaps in a fresh tip rack
+    magnet = "magnet"  # engage or disengage a magnetic module
 
 
 class Transform(Strict):
@@ -46,6 +47,9 @@ class Transform(Strict):
     tip_name: str | None = None  # transfer/mix inside a with_tip: use that tip instead of a fresh one
     tip_action: Literal["pick", "drop", "return"] | None = None  # tip only
     rack: str | None = None  # replenish only
+    module: str | None = None  # magnet only
+    engaged: bool | None = None  # magnet only
+    height_mm: float | None = None  # magnet only
     aspirate: Motion | None = None  # transfer: how to draw
     dispense: Motion | None = None  # transfer: how to deliver
     air_gap_ul: float = 0.0  # transfer

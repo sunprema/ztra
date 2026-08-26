@@ -11,6 +11,12 @@ slots:
   "5": { entity: WASTE }
   "12": { trash: true }
 
+modules:
+  MAG1:                       # a module names its own slot; the plate on it is not listed under slots
+    kind: magnetic
+    slot: "6"
+    holds: P2
+
 tube_racks:
   TR1:
     labware: opentrons_24_tuberack_nest_1.5ml_snapcap

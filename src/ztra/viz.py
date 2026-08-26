@@ -10,7 +10,7 @@ import itertools
 from dataclasses import dataclass
 
 from ztra.diff import Verdict, WorldDiff
-from ztra.lower import Aspirate, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, PirL, ReturnTip, lower
+from ztra.lower import Aspirate, Delay, Dispense, DropTip, Magnet, MixOp, ObserveL, Pause, PickUpTip, PirL, ReturnTip, lower
 from ztra.protocol import Protocol
 from ztra.schedule import Budget
 from ztra.world import World
@@ -125,6 +125,10 @@ def deck_svg(world: World) -> str:
             s = world.deck.slots.get(slot)
             label = "trash" if (s and s.trash) else (s.entity if s and s.entity else "")
             fill = "#F4F4F4" if s is None else ("#E8E0DA" if s.trash else "#EAF1F8")
+            for mid, m in world.deck.modules.items():
+                if m.slot == slot:
+                    label = f"{mid} ▸ {m.holds}" if m.holds else mid
+                    fill = "#F3E9F5" if m.engaged else "#EEE9F0"
             parts.append(f'<rect x="{x}" y="{y}" width="{bw}" height="{bh}" rx="6" fill="{fill}" stroke="#CCC"/>')
             parts.append(f'<text x="{x + 6}" y="{y + 15}" fill="#999" font-size="10">{slot}</text>')
             if label:
@@ -282,6 +286,8 @@ def describe_op(world: World, op: PirL) -> str:
         return f"read {op.sensor} ({op.label})"
     if isinstance(op, Delay):
         return f"wait {op.seconds:g} s"
+    if isinstance(op, Magnet):
+        return f"engage magnet {op.module} at {op.height_mm:g} mm" if op.engaged and op.height_mm is not None else f"disengage magnet {op.module}"
     return op.op
 
 

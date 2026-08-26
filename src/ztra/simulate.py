@@ -111,6 +111,11 @@ def _run(base: World, ops: list[Transform | ObserveOp], rng: random.Random | Non
             continue
         if op.kind is TransformKind.delay or op.kind is TransformKind.tip:
             continue  # nothing moves while waiting; a tip scope is bookkeeping, tips are taken at first use
+        if op.kind is TransformKind.magnet:
+            m = run.world.deck.modules.get(op.module or "")
+            if m is not None:
+                m.engaged, m.height_mm = bool(op.engaged), (op.height_mm if op.engaged else None)
+            continue
         if op.kind is TransformKind.replenish:
             if op.rack in run.world.deck.tip_racks:
                 run.world.deck.tip_racks[op.rack].used = []

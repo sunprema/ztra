@@ -67,7 +67,7 @@ def preflight(world: World, protocol: Protocol, budget: Budget | None = None) ->
         thawed = {vid for vid, v in inv.vials.items() if v.state is ThermalState.thawed}
         shared_tips: set[str] = set()  # with_tip names that already hold a tip on this path
         for op in ops:
-            if isinstance(op, ObserveOp) or op.kind in (TransformKind.delay, TransformKind.tip):
+            if isinstance(op, ObserveOp) or op.kind in (TransformKind.delay, TransformKind.tip, TransformKind.magnet):
                 continue
             if op.kind is TransformKind.replenish:
                 rack = world.deck.tip_racks.get(op.rack or "")

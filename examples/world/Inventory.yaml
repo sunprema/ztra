@@ -18,6 +18,9 @@ reagents:
     concentration: "10 U/uL"
   wash_buffer:
     hazard: inert
+  beads:
+    hazard: inert
+    magnetic: true            # pellets on the magnetic module; stays behind when supernatant is drawn
 
 vials:
   V_water:
@@ -41,6 +44,12 @@ plates:
     wells:
       A1:
         - { reagent: water, volume_ul: 50 }
+  P2:                         # a PCR plate on the magnetic module; A1 holds a bead suspension
+    labware: nest_96_wellplate_100ul_pcr_full_skirt
+    wells:
+      A1:
+        - { reagent: beads, volume_ul: 20 }
+        - { reagent: water, volume_ul: 80 }
   RES1:                       # a 12-channel trough of wash buffer, addressed like a 1x12 plate
     labware: nest_12_reservoir_15ml
     wells:

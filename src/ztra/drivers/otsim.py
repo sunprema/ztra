@@ -129,14 +129,16 @@ class OpentronsSimDriver:
 
     def _run_vendor(self, source: str) -> dict[str, Any]:
         wells: dict[str, list[str]] = {}
-        for slot, content in self.physical.deck.slots.items():
-            if content.entity in self.physical.inventory.plates:
-                plate = self.physical.inventory.plates[content.entity]
+        for entity in self.physical.deck.placed():
+            slot = self.physical.deck.slot_of(entity)
+            if slot is None:
+                continue
+            if entity in self.physical.inventory.plates:
+                plate = self.physical.inventory.plates[entity]
                 d = self.physical.hardware.labware[plate.labware]
                 wells[slot] = [f"{chr(ord('A') + r)}{c + 1}" for r in range(d.rows) for c in range(d.cols)]
-            elif content.entity in self.physical.deck.tube_racks:
-                rack = content.entity
-                wells[slot] = sorted(link.well for link in self.physical.deck.linker.values() if link.rack == rack)
+            elif entity in self.physical.deck.tube_racks:
+                wells[slot] = sorted(link.well for link in self.physical.deck.linker.values() if link.rack == entity)
         robot = "Flex" if self.physical.hardware.robot.model is RobotModel.flex else "OT-2"
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "segment.py").write_text(source)
@@ -158,8 +160,9 @@ class OpentronsSimDriver:
         w = self.physical
         vial_at = {(link.rack, link.well): vid for vid, link in w.deck.linker.items()}
         problems = []
+        by_slot = {w.deck.slot_of(e): e for e in w.deck.placed()}
         for slot, per_well in volumes.items():
-            entity = w.deck.slots[slot].entity
+            entity = by_slot.get(slot)
             assert entity is not None
             for well, vendor_ul in per_well.items():
                 if entity in w.inventory.plates:

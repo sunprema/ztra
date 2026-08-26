@@ -117,7 +117,17 @@ class Delay(Strict):
     origin: Origin
 
 
-PirL = Annotated[Union[PickUpTip, Aspirate, Dispense, MixOp, DropTip, ReturnTip, Pause, ObserveL, Delay], Field(discriminator="op")]
+class Magnet(Strict):
+    """Raise or lower a magnetic module's magnet."""
+
+    op: Literal["magnet"] = "magnet"
+    module: str
+    engaged: bool
+    height_mm: float | None = None
+    origin: Origin
+
+
+PirL = Annotated[Union[PickUpTip, Aspirate, Dispense, MixOp, DropTip, ReturnTip, Pause, ObserveL, Delay, Magnet], Field(discriminator="op")]
 
 
 class Halt(Strict):
@@ -231,6 +241,8 @@ class _Lowerer:
             out.append(Pause(message=f"Thaw {loc_str(op.inputs[0].loc)} and resume", origin=o))
         elif op.kind is TransformKind.delay:
             out.append(Delay(seconds=op.seconds or 0.0, origin=o))
+        elif op.kind is TransformKind.magnet:
+            out.append(Magnet(module=op.module or "", engaged=bool(op.engaged), height_mm=op.height_mm, origin=o))
         elif op.kind is TransformKind.tip:
             name = op.tip_name or ""
             if op.tip_action == "pick":

@@ -130,6 +130,19 @@ run does; ideal pipettes, so it complements the `FakeDriver` (noise, faults) rat
   `depth`, and `diameter` (circular) or `xDimension`/`yDimension` (rectangular) — the catalog's
   `well_depth_mm` / `well_diameter_mm`.
 
+## Magnetic module — probed 2026-08-26 (opentrons 8.8.2, apiLevel 2.22)
+
+- `ctx.load_module("magnetic module gen2", "6")` (model `magneticModuleV2`), then `mag.load_labware(name)`;
+  the plate is keyed by the module's slot in `ctx.loaded_labwares`, so the vendor-sim driver's well manifest
+  needs nothing special. Any plate loads (the flat Corning plate too).
+- `engage(height_from_base=h)`: the engine adds a 2.5 mm offset and refuses hardware heights outside 0–25
+  (`EngageHeightOutOfRangeError`), so `h` is 0..22.5. `disengage()`. In simulation `status` does not change.
+- The engine has no idea what beads are: liquid tracking sees totals only. ztra's `magnetic: true` reagents
+  are a refinement on top; the two agree on totals, which is what the vendor-sim cross-check compares.
+- Flex has no magnetic module; its **magnetic block** is passive (the gripper moves the plate) and is not modelled.
+- Geometry of `nest_96_wellplate_100ul_pcr_full_skirt`: 100 µL, depth 14.78, diameter 5.34, height 15.7,
+  default engage height 20 (`parameters.magneticModuleEngageHeight`).
+
 ## What real protocols need
 
 The vendor's community Cookbook was reviewed 2026-08-26 as evidence of what working protocols actually

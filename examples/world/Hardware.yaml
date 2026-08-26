@@ -33,6 +33,14 @@ labware:
     height_mm: 43.0
     well_depth_mm: 37.9
     well_diameter_mm: 10.2
+  nest_96_wellplate_100ul_pcr_full_skirt:
+    kind: plate
+    rows: 8
+    cols: 12
+    well_max_ul: 100
+    height_mm: 15.7
+    well_depth_mm: 14.78
+    well_diameter_mm: 5.34
   nest_12_reservoir_15ml:
     kind: reservoir
     rows: 1

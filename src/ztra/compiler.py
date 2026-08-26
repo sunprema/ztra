@@ -17,6 +17,8 @@ from ztra.protocol import (
     PROTOCOL_VERSION,
     Condition,
     Delay,
+    DisengageMagnet,
+    EngageMagnet,
     ForEach,
     ForWells,
     IfObserved,
@@ -43,6 +45,7 @@ from ztra.world.hardware import LabwareDef, Pipette
 from ztra.world.inventory import Liquid, ThermalState, incompatible, total_ul
 
 MAX_PATHS = 64  # hard cap on branch paths (each branch doubles them) so compile time stays bounded
+MAGNET_MAX_MM = 22.5  # GEN2 magnetic module: engage height above the labware base (the vendor caps the hardware height at 25)
 EPS = 1e-9
 
 
@@ -64,6 +67,7 @@ class Cost:
     delays: int = 0
     tips_used: int = 0  # fresh tips taken from racks; a shared or reused tip counts once
     tip_racks_replaced: int = 0
+    module_actions: int = 0  # magnet engage/disengage and the like
     observations: int = 0
     reagent_consumed_ul: dict[str, float] = field(default_factory=dict)  # stock drawn from vials, per reagent
     estimated_time_s: float = 0.0
@@ -232,6 +236,10 @@ class _Unroller:
                 if self.tip_scope is not None:
                     raise CompileError("E_TIP_SCOPE", "a rack cannot be swapped while a tip is in use", step.rack, "outside any with_tip", f"inside with_tip {self.tip_scope}", "move replenish_tips outside the with_tip", origin=origin)
                 out.append(Transform(kind=TransformKind.replenish, inputs=[], outputs=[], rack=step.rack, origin=origin))
+            elif isinstance(step, EngageMagnet):
+                out.append(Transform(kind=TransformKind.magnet, inputs=[], outputs=[], module=step.module, engaged=True, height_mm=step.height_mm, origin=origin))
+            elif isinstance(step, DisengageMagnet):
+                out.append(Transform(kind=TransformKind.magnet, inputs=[], outputs=[], module=step.module, engaged=False, origin=origin))
             elif isinstance(step, Delay):
                 seconds = step.seconds + 60.0 * step.minutes
                 if not seconds > 0:
@@ -404,6 +412,21 @@ class _Checker:
                     st.trace.append(f"drop tip {rec.rack}:{rec.well}" if rec else f"with_tip {name}: no tip was needed")
                 else:
                     st.trace.append(f"return tip {rec.rack}:{rec.well} ({name}) to its rack" if rec else f"with_tip {name}: no tip was needed")
+        elif op.kind is TransformKind.magnet:
+            mid = op.module or ""
+            module = st.world.deck.modules.get(mid)
+            if module is None:
+                raise self.err(st, "E_UNKNOWN_ENTITY", origin, "every entity must exist in the world model", mid, "a module in Deck.modules", "not found", "check the module id")
+            if op.engaged:
+                h = op.height_mm or 0.0
+                if not 0 <= h <= MAGNET_MAX_MM:
+                    raise self.err(st, "E_MAGNET_HEIGHT", origin, "the magnet can only rise so far above the labware base", mid, f"0..{fmt(MAGNET_MAX_MM)} mm", f"{fmt(h)} mm", "use the height the bead protocol recommends for this plate")
+                module.engaged, module.height_mm = True, h
+                st.trace.append(f"engage {mid} at {fmt(h)} mm: magnetic reagents in {module.holds or 'nothing'} stay put from here")
+            else:
+                module.engaged, module.height_mm = False, None
+                st.trace.append(f"disengage {mid}: beads in {module.holds or 'nothing'} move with the liquid again")
+            st.cost.module_actions += 1
         elif op.kind is TransformKind.replenish:
             rack = op.rack or ""
             if rack not in st.world.deck.tip_racks:
@@ -501,10 +524,13 @@ class _Checker:
         _, contents = self.well(st, origin, loc.plate, loc.well)
         if st.world.inventory.plates[loc.plate].waste:
             raise self.err(st, "E_WASTE_SOURCE", origin, "liquid in the waste is gone; nothing can be drawn from it", loc.plate, "a plate, reservoir or vial", "a waste reservoir", "aspirate from somewhere else", coordinate=loc.well)
-        total = total_ul(contents)
+        movable = mobile(st.world, loc)
+        total = total_ul(movable)
         if total + EPS < vol:
-            raise self.err(st, "E_VOLUME", origin, "cannot aspirate more than is present", f"{loc.plate}:{loc.well}", f">= {fmt(vol)} uL", f"{fmt(total)} uL", "reduce the volume", coordinate=loc.well)
-        return _Taken([Liquid(reagent=l.reagent, volume_ul=vol * l.volume_ul / total) for l in contents], None)
+            held = total_ul(contents) - total
+            hint = "reduce the volume" + (f"; {fmt(held)} uL of beads are held by the magnet" if held > EPS else "")
+            raise self.err(st, "E_VOLUME", origin, "cannot aspirate more than is present", f"{loc.plate}:{loc.well}", f">= {fmt(vol)} uL", f"{fmt(total)} uL", hint, coordinate=loc.well)
+        return _Taken([Liquid(reagent=l.reagent, volume_ul=vol * l.volume_ul / total) for l in movable], None)
 
     def well(self, st: _PathState, origin: Origin, plate: str, well: str) -> tuple[float, list[Liquid]]:
         """Look up a plate well: does it exist, what's in it, how much fits."""
@@ -573,9 +599,24 @@ def liquids_at(world: World, loc: Loc) -> list[Liquid]:
     return list(world.inventory.plates[loc.plate].wells.get(loc.well, []))
 
 
+def pelleted(world: World, plate: str) -> bool:
+    """Is this plate on an engaged magnetic module, so its magnetic reagents stay put?"""
+    under = world.deck.module_under(plate)
+    return under is not None and under[1].engaged
+
+
+def mobile(world: World, loc: Loc) -> list[Liquid]:
+    """What can actually be drawn from a location: everything, unless a magnet is holding the beads."""
+    contents = liquids_at(world, loc)
+    if isinstance(loc, WellLoc) and pelleted(world, loc.plate):
+        reagents = world.inventory.reagents
+        return [l for l in contents if not (l.reagent in reagents and reagents[l.reagent].magnetic)]
+    return contents
+
+
 def take_liquids(world: World, loc: Loc, vol: float) -> list[Liquid]:
     """The mixture `vol` µL drawn from a location would contain. No checks."""
-    contents = liquids_at(world, loc)
+    contents = mobile(world, loc)
     total = total_ul(contents)
     if total <= 0:
         return []
@@ -593,9 +634,10 @@ def remove_liquid(world: World, src: Loc, vol: float) -> bool:
             return True
         return False
     contents = world.inventory.plates[src.plate].wells.get(src.well, [])
-    total = total_ul(contents)
+    movable = mobile(world, src)  # the same Liquid objects, minus pelleted beads
+    total = total_ul(movable)
     if total > 0:
-        for l in contents:
+        for l in movable:
             l.volume_ul -= vol * l.volume_ul / total
     contents[:] = [l for l in contents if l.volume_ul > EPS]
     return False

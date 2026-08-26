@@ -50,6 +50,10 @@ plates:
     waste: true                 # a liquid waste: receives anything, nothing can be drawn back (E_WASTE_SOURCE)
 ```
 
+A reagent may be `magnetic: true` (beads): while its plate sits on an engaged magnetic module, drawing
+liquid from a well takes everything *except* the magnetic components — the supernatant leaves, the beads stay.
+With the magnet down, beads move with the liquid in proportion like any other component.
+
 Reservoirs (troughs) are plates with a different grid and are addressed the same way in protocols
 (`{ plate: RES1, well: A1 }`); a 12-channel trough is `A1..A12`. Hazard rules apply to the waste too: acid
 and base may not meet there either.
@@ -160,6 +164,10 @@ world unusable; warnings describe a legal but probably unintended state.
 | `W_LABWARE_GRID` / `W_LABWARE_HEIGHT` / `W_LABWARE_CAPACITY` / `W_LABWARE_TIP_VOLUME` | E | malformed labware definition |
 | `W_PLATE_NOT_96` | E | a `kind: plate` is not 8×12 (CON-1); reservoirs may have any grid |
 | `W_LABWARE_GEOMETRY` | E | `well_depth_mm` / `well_diameter_mm` given but not > 0 |
+| `W_MODULE_ROBOT` | E | a magnetic module on a Flex (its magnetic block is not modelled) |
+| `W_SLOT_MODULE_CLASH` | E | a module's slot is also listed under `slots` |
+| `W_MODULE_HOLDS_UNKNOWN` | E | a module `holds` something that is not a plate |
+| `W_MAGNET_HEIGHT` | E | a recorded engage height outside 0..22.5 mm |
 | `W_WASTE_NOT_RESERVOIR` | W | `waste: true` on something other than a reservoir |
 | `W_WELL_INVALID` | E | well name outside the labware grid |
 | `W_WELL_OVERFLOW` | E | recorded contents exceed `well_max_ul` (CON-2) |

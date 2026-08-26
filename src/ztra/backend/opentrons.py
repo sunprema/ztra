@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from ztra.lower import Aspirate, Decide, Delay, Dispense, DropTip, MixOp, ObserveL, Pause, PickUpTip, Program, ReturnTip, Segment
+from ztra.lower import Aspirate, Decide, Delay, Dispense, DropTip, Magnet, MixOp, ObserveL, Pause, PickUpTip, Program, ReturnTip, Segment
 from ztra.world import World
 from ztra.world.hardware import RobotModel, fmt
 from ztra.world.inventory import total_ul
@@ -36,6 +36,10 @@ def emit_segment(world: World, program: Program, index: int, seg: Segment) -> st
     for slot, content in sorted(world.deck.slots.items(), key=lambda kv: _slot_order(kv[0])):
         if content.entity is not None:
             lines.append(f'    {_var(content.entity)} = ctx.load_labware("{_labware_name(world, content.entity)}", "{slot}")')
+    for mid, m in sorted(world.deck.modules.items()):
+        lines.append(f'    {_var(mid)} = ctx.load_module("{m.model}", "{m.slot}")')
+        if m.holds is not None:
+            lines.append(f'    {_var(m.holds)} = {_var(mid)}.load_labware("{_labware_name(world, m.holds)}")')
     if hw.robot.model is RobotModel.flex:
         trash = world.deck.trash_slot()
         if trash is not None:
@@ -86,6 +90,11 @@ def emit_segment(world: World, program: Program, index: int, seg: Segment) -> st
                         lines.append(f"    {_pip(p.name)}.reset_tipracks()")
         elif isinstance(op, Delay):
             lines.append(f"    ctx.delay(seconds={fmt(op.seconds)})")
+        elif isinstance(op, Magnet):
+            if op.engaged:
+                lines.append(f"    {_var(op.module)}.engage(height_from_base={fmt(op.height_mm or 0.0)})")
+            else:
+                lines.append(f"    {_var(op.module)}.disengage()")
         elif isinstance(op, ObserveL):
             lines.append(f"    ctx.pause({_py_str(f'OBSERVE {op.label}: waiting for {op.sensor}')})")
     return "\n".join(lines) + "\n"

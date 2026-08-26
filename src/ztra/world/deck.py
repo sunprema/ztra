@@ -1,5 +1,7 @@
 """Deck.yaml — where things sit on the robot, which tips are used, and the address of every vial."""
 
+from typing import Literal
+
 from pydantic import Field
 
 from ztra.model import Strict
@@ -30,21 +32,43 @@ class Link(Strict):
     well: str
 
 
+class Module(Strict):
+    """A module sitting in a slot with a plate on top. Only the OT-2 magnetic module so far:
+    while it is engaged, magnetic reagents in the plate stay put when liquid is drawn."""
+
+    kind: Literal["magnetic"]
+    model: str = "magnetic module gen2"  # the vendor load name
+    slot: str
+    holds: str | None = None  # the plate on top
+    engaged: bool = False
+    height_mm: float | None = None  # magnet height above the labware base while engaged
+
+
 class Deck(Strict):
     version: int
     slots: dict[str, Slot] = Field(default_factory=dict)  # OT-2 uses "1".."12", Flex uses "A1".."D4"
+    modules: dict[str, Module] = Field(default_factory=dict)  # each names its own slot; that slot is not in `slots`
     tube_racks: dict[str, TubeRack] = Field(default_factory=dict)
     tip_racks: dict[str, TipRack] = Field(default_factory=dict)
     linker: dict[str, Link] = Field(default_factory=dict)  # where each vial is; the robot can only reach vials listed here
 
     def placed(self) -> list[str]:
-        """Entity ids that sit in a slot."""
-        return [s.entity for s in self.slots.values() if s.entity is not None]
+        """Entity ids that sit in a slot, directly or on a module."""
+        return [s.entity for s in self.slots.values() if s.entity is not None] + [m.holds for m in self.modules.values() if m.holds is not None]
 
     def slot_of(self, entity: str) -> str | None:
         for name, s in self.slots.items():
             if s.entity == entity:
                 return name
+        for m in self.modules.values():
+            if m.holds == entity:
+                return m.slot
+        return None
+
+    def module_under(self, entity: str) -> tuple[str, Module] | None:
+        for mid, m in self.modules.items():
+            if m.holds == entity:
+                return mid, m
         return None
 
     def trash_slot(self) -> str | None:

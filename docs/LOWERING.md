@@ -20,6 +20,7 @@ ztra lower <world_dir> <protocol.yaml> --out <dir>  → writes program.json + se
 | `transform delay` | `delay seconds` (the robot waits on its own) |
 | `transform tip pick` / `drop` / `return` | opens a shared-tip scope (the tip is picked at the first step inside); `drop_tip` or `return_tip` at the end |
 | `transform replenish` | `pause "Replace tip rack R…"` with `replenish_rack: R`; the backend adds `reset_tipracks()` for every pipette that uses the rack; allocation restarts at A1 |
+| `transform magnet` | `magnet {module, engaged, height_mm}` → `MAG1.engage(height_from_base=…)` / `MAG1.disengage()`; the module is loaded with `ctx.load_module(model, slot)` and its plate with `MAG1.load_labware(...)` |
 | `branch` | a segment boundary — see §2 |
 
 Along the way it:

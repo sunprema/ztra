@@ -48,9 +48,12 @@ workflow that needs them all. Sizes: S = a day or less, M = days, L = a week-sca
    against `well_depth_mm` / `well_diameter_mm` in the catalog (`E_POSITION`) and the safe envelope
    (`E_FLOW_RATE`). The vendor engine subtracts the air gap when tracking liquid, so the vendor-sim
    cross-check stays exact (OPENTRONS_NOTES.md).
-6. **The magnetic module (M).** `magdeck.engage(height)` / `disengage()` plus a module occupying a slot
-   under a plate. First module in the world model and PIR-L; with 3 and 5 it makes bead cleanup —
-   arguably the most automated workflow in the field (NGS prep, extractions) — expressible.
+6. **The magnetic module (M) — done 2026-08-26.** `magdeck.engage(height)` / `disengage()` plus a
+   module occupying a slot under a plate. Now `Deck.modules` (kind, slot, the plate it holds, engaged
+   state), `engage_magnet` / `disengage_magnet` steps, and `magnetic: true` reagents that stay put while
+   the magnet is up — so a supernatant removal predicts "80 µL of water to waste, 20 µL of beads stay",
+   and asking for more than the supernatant is an `E_VOLUME` that says how much the magnet holds. With 3
+   and 5, one full wash round compiles, lowers and runs on the vendor engine (tests/test_magnet.py).
 7. **Multi-channel pipettes (L).** Every serious recipe uses `p300_multi_gen2`. Eight tips per pickup,
    row-of-rack addressing, column-wise transfers: this reaches deepest into lowering, tip accounting and
    the compiler, which is why it goes last, on top of the settled foundations.

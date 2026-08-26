@@ -36,6 +36,7 @@ class Reagent(Strict):
     concentration: str | None = None  # what the stock bottle says, like "1 M" or "10 U/uL"
     msds: str | None = None  # link or id of the MSDS sheet
     density_mg_per_ul: float = 1.0  # so a volume can become an expected scale reading; water is 1.0
+    magnetic: bool = False  # beads: held in place while the plate sits on an engaged magnetic module
 
 
 class Concentration(Strict):
