@@ -1,0 +1,7 @@
+This is the sensor model: given a world and a sensor id, what would a *perfect* instrument read right now. Noise is deliberately not this file's job — `read()` returns the exact value, and it's the simulator that adds error on top, keeping "what a sensor sees" and "how reliable it is" as separate concerns.
+
+A `Reading` is a small dict keyed by metric: a plate-mass scale gives one number (`mass_mg`), a well-volume sensor (camera, level sensor) gives one entry per well it can actually see. `wells_seen()` expands a sensor's declared coverage — an explicit list of wells plus whole listed columns — into concrete well names, which is what lets `Hardware.yaml` say "this camera covers column 1" instead of enumerating eight wells by hand.
+
+`_mass_mg()` is the one place unit conversion happens: it sums `volume_ul * density` per liquid, using each reagent's declared density (defaulting to 1.0 mg/µL when unspecified), so a scale reading reflects actual mass rather than treating every liquid as water. It handles both plates (summed across wells) and tube racks (summed across vials in the rack via the deck linker) — those are the two things a scale might be weighing.
+
+The second half of the file is the mirror image: `Telemetry`/`TelemetryReading` model what actually came back from a real run, loaded from YAML (`Telemetry.load`) with validation errors translated into a plain message. `by_label()` indexes readings by the protocol's `observe` label, which is exactly the key the diff engine needs to match a real reading against its expected one.

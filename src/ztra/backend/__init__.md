@@ -1,0 +1,1 @@
+Docstring only: states the contract every backend module must meet — turn one PIR-L segment into something a vendor can run, one output file per segment, run in segment order by the runtime. `opentrons.py` is the only implementation today; a SiLA2 backend would live alongside it under this same contract.
