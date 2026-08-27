@@ -10,7 +10,7 @@ from typing import Annotated, Literal, Union
 from pydantic import Field
 
 from ztra.model import Strict
-from ztra.protocol import Condition, Loc, Motion
+from ztra.protocol import Condition, Motion, PlaceLoc
 
 
 class Origin(Strict):
@@ -23,7 +23,7 @@ class Origin(Strict):
 
 
 class Port(Strict):
-    loc: Loc
+    loc: PlaceLoc
     volume_ul: float
 
 
@@ -54,6 +54,8 @@ class Transform(Strict):
     dispense: Motion | None = None  # transfer: how to deliver
     air_gap_ul: float = 0.0  # transfer
     position: Motion | None = None  # mix
+    gang: str | None = None  # an 8-channel step: the eight per-well transforms share a gang id
+    channel: int | None = None  # 0..7 within the gang; channel 0 carries the tips and the robot action
     origin: Origin
 
 

@@ -50,6 +50,9 @@ plates:
     waste: true                 # a liquid waste: receives anything, nothing can be drawn back (E_WASTE_SOURCE)
 ```
 
+A pipette with `channels: 8` (e.g. `p300_multi_gen2`) is used only by column steps (`{ plate, column }` in a
+protocol), and single-channel pipettes only by single-well steps; it takes tips a whole column at a time.
+
 A reagent may be `magnetic: true` (beads): while its plate sits on an engaged magnetic module, drawing
 liquid from a well takes everything *except* the magnetic components — the supernatant leaves, the beads stay.
 With the magnet down, beads move with the liquid in proportion like any other component.

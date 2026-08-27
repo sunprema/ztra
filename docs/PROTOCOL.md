@@ -23,7 +23,8 @@ steps:
     vial: V_enzyme                          # frozen → thawed, freeze_thaw_cycles += 1
 
   - op: transfer
-    from: { vial: V_water }                 # a Loc: { vial: id } or { plate: id, well: A1 }; reservoirs are addressed as plates
+    from: { vial: V_water }                 # a Loc: { vial: id }, { plate: id, well: A1 }, or { plate: id, column: 3 } for a whole
+                                            #   column at once (an 8-channel step); reservoirs are addressed as plates
     to:   { plate: P1, well: B1 }
     volume_ul: 50                           # one fresh tip per transfer
     aspirate: { at: bottom, offset_mm: 0.5, side_mm: -1, rate_ul_s: 20 }   # optional: where in the well, how fast
@@ -96,6 +97,13 @@ Unknown fields and unknown `op`s are rejected at load.
 - Branching multiplies the number of paths the compiler must check; more than **64 paths** (`MAX_PATHS`)
   is `E_TOO_MANY_PATHS`.
 - Vials hold a single reagent; mixtures live in plate wells (`E_MIXTURE_IN_VIAL`).
+- **Columns (8 channels).** A `{ plate, column }` location makes the whole step an 8-channel one: the compiler
+  expands it into eight per-well operations that share one *gang*, so every well of the column is checked on
+  its own (volume, capacity, hazards, beads), while the tips come as a whole free column and the robot action
+  is one. In such a step a 96-well plate must be addressed by column and a trough by its single well (every
+  channel draws from it); a vial or a single plate well is `E_PIPETTE_CHANNELS`. The step needs an 8-channel
+  pipette, and single-well steps need a single-channel one (`E_PIPETTE_CHANNELS`). A column with any tip
+  missing is skipped (`E_TIPS` if none is whole). Costs count a column step once; `tips_used` counts eight.
 - **Motion.** Left out, the vendor defaults apply (1 mm above the well bottom, the pipette's own speed). Given,
   a position must stay inside the well — bounded by `well_depth_mm` / `well_diameter_mm` from the labware
   catalog when they are known (`E_POSITION`) — and a flow rate inside `safe_envelope.max_flow_rate_ul_s`
@@ -177,6 +185,7 @@ must match (`E_PROTOCOL_VERSION`).
 | `E_UNKNOWN_ENTITY` | vial / plate does not exist |
 | `E_COORDINATE` | well is not on the plate's labware |
 | `E_PIPETTE_RANGE` | volume not servable by any pipette |
+| `E_PIPETTE_CHANNELS` | a column step without an 8-channel pipette (or a single-well step without a single-channel one); a vial or single plate well inside an 8-channel step |
 | `E_CONSUMED` | consumed linear resource reused |
 | `E_STATE` | aspiration from a frozen vial |
 | `E_VOLUME` | aspirating more than present |

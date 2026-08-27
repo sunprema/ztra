@@ -83,9 +83,10 @@ def preflight(world: World, protocol: Protocol, budget: Budget | None = None) ->
                 assert isinstance(loc, VialLoc)
                 thawed.add(loc.vial)
                 continue
-            found = hw.pipette_for(vol, op.kind is TransformKind.transfer)
-            if found is not None and (op.tip_name is None or op.tip_name not in shared_tips):
-                t_need[found[0].name] = t_need.get(found[0].name, 0) + 1
+            channels = 8 if op.gang else 1
+            found = hw.pipette_for(vol, op.kind is TransformKind.transfer, op.air_gap_ul, channels)
+            if found is not None and (op.gang is None or op.channel == 0) and (op.tip_name is None or op.tip_name not in shared_tips):
+                t_need[found[0].name] = t_need.get(found[0].name, 0) + channels
                 if op.tip_name is not None:
                     shared_tips.add(op.tip_name)
             if op.kind is TransformKind.mix:

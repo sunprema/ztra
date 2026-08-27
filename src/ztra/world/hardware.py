@@ -134,14 +134,14 @@ class Hardware(Strict):
     sensors: dict[str, Sensor] = Field(default_factory=dict)
     safe_envelope: SafeEnvelope = Field(default_factory=SafeEnvelope)
 
-    def pipette_for(self, volume_ul: float, allow_split: bool, reserve_ul: float = 0.0) -> tuple[Pipette, int] | None:
-        """Pick the smallest pipette that fits the volume. If nothing is big enough and
-        splitting is allowed, use the largest one over several cycles. None if no pipette can do it.
-        `reserve_ul` is room kept free in the tip on every cycle (an air gap)."""
+    def pipette_for(self, volume_ul: float, allow_split: bool, reserve_ul: float = 0.0, channels: int = 1) -> tuple[Pipette, int] | None:
+        """Pick the smallest pipette with this many channels that fits the volume. If nothing is
+        big enough and splitting is allowed, use the largest one over several cycles. None if no
+        pipette can do it. `reserve_ul` is room kept free in the tip on every cycle (an air gap)."""
         eps = 1e-9
         if not (volume_ul > 0) or volume_ul == float("inf"):
             return None
-        by_size = sorted(self.pipettes, key=lambda p: p.max_ul)
+        by_size = sorted((p for p in self.pipettes if p.channels == channels), key=lambda p: p.max_ul)
         for p in by_size:
             if p.min_ul <= volume_ul + eps and volume_ul <= p.max_ul - reserve_ul + eps:
                 return p, 1

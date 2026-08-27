@@ -33,7 +33,9 @@ Along the way it:
   tip wells in the vendor code match the predicted world's `tip_racks.used`. Error: `E_TIPS`.
 
 PIR-L ops: `pick_up_tip`, `aspirate`, `dispense`, `mix`, `drop_tip`, `return_tip`, `pause`, `observe`, `delay`.
-`aspirate`, `dispense` and `mix` carry the optional motion (`at`, `offset_mm`, `side_mm`, `rate_ul_s`);
+`pick_up_tip`, `return_tip`, `aspirate`, `dispense` and `mix` carry `channels` (1, or 8 for a column step: the
+well named is the top of the column, or the one trough well every channel uses; channels 1–7 of a gang lower
+to nothing, channel 0 carries the action). `aspirate`, `dispense` and `mix` carry the optional motion (`at`, `offset_mm`, `side_mm`, `rate_ul_s`);
 `aspirate`/`dispense` carry `air_gap_ul` (the dispense delivers liquid + air), `dispense` carries `blow_out`.
 The backend emits `well.bottom(z)` / `well.top(z)` with `.move(types.Point(x=side, …))`, an absolute
 flow-rate set-and-restore around the command, `air_gap()` after the aspirate and `blow_out()` after the

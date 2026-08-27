@@ -54,9 +54,12 @@ workflow that needs them all. Sizes: S = a day or less, M = days, L = a week-sca
    the magnet is up — so a supernatant removal predicts "80 µL of water to waste, 20 µL of beads stay",
    and asking for more than the supernatant is an `E_VOLUME` that says how much the magnet holds. With 3
    and 5, one full wash round compiles, lowers and runs on the vendor engine (tests/test_magnet.py).
-7. **Multi-channel pipettes (L).** Every serious recipe uses `p300_multi_gen2`. Eight tips per pickup,
-   row-of-rack addressing, column-wise transfers: this reaches deepest into lowering, tip accounting and
-   the compiler, which is why it goes last, on top of the settled foundations.
+7. **Multi-channel pipettes (L) — done 2026-08-26.** Every serious recipe uses `p300_multi_gen2`. Now a
+   `{ plate, column }` location makes a step 8-channel: the compiler expands it into eight per-well
+   operations sharing a *gang* — every well checked on its own — while tips come as a whole free column and
+   the robot action is one (`channels: 8` on the PIR-L ops). Troughs serve every channel from one well;
+   vials and single plate wells are refused in such a step (`E_PIPETTE_CHANNELS`). The vendor engine's
+   per-well tracking matches the gang model exactly (OPENTRONS_NOTES.md).
 
 **Acceptance test for the lot — passed 2026-08-26 (single-channel):** the cookbook's wash-step +
 supernatant-removal recipes as [`examples/protocols/bead_wash.yaml`](../examples/protocols/bead_wash.yaml):
@@ -67,7 +70,10 @@ as 20 µL of beads, the waste holds exactly the water and buffer that left), pre
 lowers to one vendor file, runs on the fake lab, and runs inside the vendor engine with every volume
 agreeing (`tests/test_wash_acceptance.py`). One difference from the cookbook, on purpose: the cookbook reuses
 each sample's tip to draw buffer from the shared trough in later rounds; ztra's one-source rule refuses that,
-so the buffer goes on from above with a clean tip instead. Gap 7 remains: this is the single-channel form.
+so the buffer goes on from above with a clean tip instead. **The 8-channel form passed the same day**
+([`examples/protocols/bead_wash_8ch.yaml`](../examples/protocols/bead_wash_8ch.yaml)): eight samples in one
+column, every step a column step, 32 tips as four columns, a quarter of the robot moves — and the vendor
+engine agrees on all eight wells. All seven gaps are closed.
 
 ## Confirmed non-goals
 

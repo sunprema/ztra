@@ -54,7 +54,7 @@ def schedule(world: World, pir: list[PirH], budget: Budget) -> list[PirH]:
                 out.append(Branch(observation=op.observation, condition=op.condition, then=walk(op.then), otherwise=walk(op.otherwise), origin=op.origin))
                 continue
             out.append(op)
-            if budget.every is not None and isinstance(op, Transform) and op.kind in (TransformKind.transfer, TransformKind.mix):
+            if budget.every is not None and isinstance(op, Transform) and op.kind in (TransformKind.transfer, TransformKind.mix) and op.channel in (None, 0):
                 counter[0] += 1
                 if counter[0] % budget.every == 0:
                     out.append(observe(op.origin))

@@ -77,6 +77,24 @@ class Deck(Strict):
                 return name
         return None
 
+    def take_column(self, hardware: Hardware, pipette: Pipette) -> tuple[str, str] | None:
+        """Take a whole free column of tips for an 8-channel pipette and mark all of them
+        used. A column with any tip missing is skipped. Returns (rack id, top well) or None."""
+        placed = self.placed()
+        for rack_id in sorted(self.tip_racks):
+            rack = self.tip_racks[rack_id]
+            if rack.labware not in pipette.tip_labware or rack_id not in placed:
+                continue
+            definition = hardware.labware.get(rack.labware)
+            if definition is None or definition.rows < pipette.channels:
+                continue
+            for col in range(definition.cols):
+                names = [WellCoord(row, col).name for row in range(pipette.channels)]
+                if all(n not in rack.used for n in names):
+                    rack.used.extend(names)
+                    return rack_id, names[0]
+        return None
+
     def take_tip(self, hardware: Hardware, pipette: Pipette) -> tuple[str, str] | None:
         """Take the next free tip this pipette can use and mark it used. Goes down each column
         first, racks in id order, only racks that sit in a slot. Returns (rack id, well) or None."""

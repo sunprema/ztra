@@ -266,16 +266,21 @@ def describe_op(world: World, op: PirL) -> str:
                 return vid
         return f"{labware} {well}"
 
+    def target(labware: str, well: str, channels: int) -> str:
+        if channels > 1 and labware in world.inventory.plates and world.hardware.labware[world.inventory.plates[labware].labware].rows > 1:
+            return f"{labware} column {well[1:]} (8 channels)"
+        return place(labware, well) + (" (8 channels)" if channels > 1 else "")
+
     if isinstance(op, PickUpTip):
-        return f"pick up tip {op.well} from {op.rack}"
+        return f"pick up tip {op.well} from {op.rack}" + (f" ({op.channels} tips, the column)" if op.channels > 1 else "")
     if isinstance(op, Aspirate):
         gap = f" + {op.air_gap_ul:g} uL air" if op.air_gap_ul else ""
-        return f"aspirate {op.volume_ul:g} uL from {place(op.labware, op.well)}{_how(op.at, op.offset_mm, op.side_mm, op.rate_ul_s)}{gap}"
+        return f"aspirate {op.volume_ul:g} uL from {target(op.labware, op.well, op.channels)}{_how(op.at, op.offset_mm, op.side_mm, op.rate_ul_s)}{gap}"
     if isinstance(op, Dispense):
         blow = ", blow out" if op.blow_out else ""
-        return f"dispense {op.volume_ul:g} uL into {place(op.labware, op.well)}{_how(op.at, op.offset_mm, op.side_mm, op.rate_ul_s)}{blow}"
+        return f"dispense {op.volume_ul:g} uL into {target(op.labware, op.well, op.channels)}{_how(op.at, op.offset_mm, op.side_mm, op.rate_ul_s)}{blow}"
     if isinstance(op, MixOp):
-        return f"mix {op.repetitions} x {op.volume_ul:g} uL at {place(op.labware, op.well)}"
+        return f"mix {op.repetitions} x {op.volume_ul:g} uL at {target(op.labware, op.well, op.channels)}"
     if isinstance(op, DropTip):
         return "drop tip into trash"
     if isinstance(op, ReturnTip):

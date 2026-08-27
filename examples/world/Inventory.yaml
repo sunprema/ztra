@@ -51,6 +51,10 @@ plates:
       B1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
       C1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
       D1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
+      E1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
+      F1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
+      G1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
+      H1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
   RES1:                       # a 12-channel trough of wash buffer, addressed like a 1x12 plate
     labware: nest_12_reservoir_15ml
     wells:

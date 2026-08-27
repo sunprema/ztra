@@ -24,11 +24,24 @@ class WellLoc(Strict):
     well: str
 
 
-Loc = VialLoc | WellLoc  # where liquid is: a vial, or a well on a plate
+class ColumnLoc(Strict):
+    """A whole column of a plate at once — an 8-channel step. Every well of the column is
+    still checked on its own; the tips and the robot action are one."""
+
+    plate: str
+    column: int | str  # 1-based, or `$item.column` inside a for_each
+
+
+PlaceLoc = VialLoc | WellLoc  # one physical place liquid can be
+Loc = VialLoc | WellLoc | ColumnLoc  # what a protocol may name: a place, or a whole column
 
 
 def loc_str(loc: Loc) -> str:
-    return loc.vial if isinstance(loc, VialLoc) else f"{loc.plate}:{loc.well}"
+    if isinstance(loc, VialLoc):
+        return loc.vial
+    if isinstance(loc, ColumnLoc):
+        return f"{loc.plate}:column {loc.column}"
+    return f"{loc.plate}:{loc.well}"
 
 
 class Cmp(str, Enum):

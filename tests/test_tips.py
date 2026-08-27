@@ -124,7 +124,7 @@ def test_tip_scopes_do_not_nest_and_racks_are_not_swapped_mid_tip(world: World) 
 
 def test_one_pipette_per_tip(world: World) -> None:
     w = world.model_copy(deep=True)
-    w.hardware.pipettes.append(Pipette(name="p20_single_gen2", mount=Mount.left, min_ul=1, max_ul=20))
+    w.hardware.pipettes = [p for p in w.hardware.pipettes if p.channels == 1] + [Pipette(name="p20_single_gen2", mount=Mount.left, min_ul=1, max_ul=20)]
     y = T + """  - op: with_tip
     body:
       - { op: transfer, from: { plate: RES1, well: A1 }, to: { plate: P1, well: A10 }, volume_ul: 100 }

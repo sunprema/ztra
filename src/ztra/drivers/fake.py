@@ -10,8 +10,9 @@ from typing import Literal
 from ztra.compiler import deposit_liquid, mobile, remove_liquid, take_liquids
 from ztra.driver import DriverFault, Hooks
 from ztra.lower import Aspirate, Delay, Dispense, DropTip, Magnet, MixOp, ObserveL, Pause, PickUpTip, ReturnTip, Segment
-from ztra.protocol import Loc, VialLoc, WellLoc
+from ztra.protocol import PlaceLoc, VialLoc, WellLoc
 from ztra.world import World
+from ztra.world.coords import WellCoord
 from ztra.world.inventory import Liquid, ThermalState, total_ul
 
 Fault = Literal["clog", "door_open"]
@@ -28,7 +29,7 @@ class FakeDriver:
         self.accurate = accurate
         self.faults = dict(faults or {})
         self.bias = {} if accurate else {p.name: self.rng.gauss(0.0, p.accuracy.systematic_pct / 100.0) for p in physical.hardware.pipettes}
-        self.held: list[Liquid] = []
+        self.held: list[list[Liquid]] = []  # what each channel's tip holds
         self.segments_run: list[int] = []
 
     def run_segment(self, world: World, index: int, segment: Segment, source: str, hooks: Hooks) -> list[str]:
@@ -40,30 +41,36 @@ class FakeDriver:
                 raise DriverFault("D_DOOR_OPEN", f"the door was opened during op {i} of segment {index}", op_index=i)
             if isinstance(op, PickUpTip):
                 rack = self.physical.deck.tip_racks[op.rack]
-                if op.well not in rack.used:
-                    rack.used.append(op.well)
+                top = WellCoord.parse(op.well)
+                names = [op.well] if op.channels == 1 or top is None else [WellCoord(top.row + r, top.col).name for r in range(op.channels)]
+                rack.used.extend(n for n in names if n not in rack.used)
                 self.held = []
-                log.append(f"Picking up tip from {op.well} of {op.rack}")
+                log.append(f"Picking up tip from {op.well} of {op.rack}" + (f" ({op.channels} tips, the column)" if op.channels > 1 else ""))
             elif isinstance(op, Aspirate):
-                loc = self._loc(op.labware, op.well)
-                self.held = take_liquids(self.physical, loc, min(op.volume_ul, _available(self.physical, loc)))
-                remove_liquid(self.physical, loc, total_ul(self.held))
-                log.append(f"Aspirating {op.volume_ul} uL from {op.well} of {op.labware}")
+                self.held = []
+                for well in self._channel_wells(op.labware, op.well, op.channels):
+                    loc = self._loc(op.labware, well)
+                    liquids = take_liquids(self.physical, loc, min(op.volume_ul, _available(self.physical, loc)))
+                    remove_liquid(self.physical, loc, total_ul(liquids))
+                    self.held.append(liquids)
+                log.append(f"Aspirating {op.volume_ul} uL from {op.well} of {op.labware}" + (f" ({op.channels} channels)" if op.channels > 1 else ""))
             elif isinstance(op, Dispense):
-                loc = self._loc(op.labware, op.well)
-                held = total_ul(self.held)
-                if fault == "clog":
-                    delivered = 0.0
-                    log.append(f"Dispensing {op.volume_ul} uL into {op.well} of {op.labware} (tip clogged: nothing came out)")
-                else:
-                    delivered = held
-                    if not self.accurate:
-                        pip = self._pipette(op.pipette)
-                        delivered = held * (1.0 + self.bias.get(op.pipette, 0.0)) + self.rng.gauss(0.0, held * pip.random_pct / 100.0 + pip.random_ul)
-                        delivered = min(max(delivered, 0.0), held)
-                    log.append(f"Dispensing {op.volume_ul} uL into {op.well} of {op.labware}")
-                if delivered > 0 and held > 0:
-                    deposit_liquid(self.physical, loc, [Liquid(reagent=l.reagent, volume_ul=l.volume_ul * delivered / held) for l in self.held])
+                for ch, well in enumerate(self._channel_wells(op.labware, op.well, op.channels)):
+                    loc = self._loc(op.labware, well)
+                    in_tip = self.held[ch] if ch < len(self.held) else []
+                    held = total_ul(in_tip)
+                    if fault == "clog":
+                        delivered = 0.0
+                    else:
+                        delivered = held
+                        if not self.accurate:
+                            pip = self._pipette(op.pipette)
+                            delivered = held * (1.0 + self.bias.get(op.pipette, 0.0)) + self.rng.gauss(0.0, held * pip.random_pct / 100.0 + pip.random_ul)
+                            delivered = min(max(delivered, 0.0), held)
+                    if delivered > 0 and held > 0:
+                        deposit_liquid(self.physical, loc, [Liquid(reagent=l.reagent, volume_ul=l.volume_ul * delivered / held) for l in in_tip])
+                clogged = " (tip clogged: nothing came out)" if fault == "clog" else ""
+                log.append(f"Dispensing {op.volume_ul} uL into {op.well} of {op.labware}{clogged}")
                 self.held = []  # whatever stayed in the tip goes to the trash
             elif isinstance(op, MixOp):
                 log.append(f"Mixing {op.repetitions} times with {op.volume_ul} uL at {op.well} of {op.labware}")
@@ -98,7 +105,18 @@ class FakeDriver:
         log.append(f"[fake] segment {index} done")
         return log
 
-    def _loc(self, labware: str, well: str) -> Loc:
+    def _channel_wells(self, labware: str, well: str, channels: int) -> list[str]:
+        """The wells the channels touch: one, or a column headed by `well`, or one trough well for all."""
+        if channels == 1:
+            return [well]
+        d = self.physical.hardware.labware.get(self.physical.inventory.plates[labware].labware) if labware in self.physical.inventory.plates else None
+        if d is None or d.rows == 1:
+            return [well] * channels
+        top = WellCoord.parse(well)
+        assert top is not None
+        return [WellCoord(top.row + r, top.col).name for r in range(channels)]
+
+    def _loc(self, labware: str, well: str) -> PlaceLoc:
         if labware in self.physical.inventory.plates:
             return WellLoc(plate=labware, well=well)
         for vid, link in self.physical.deck.linker.items():
@@ -115,7 +133,7 @@ class FakeDriver:
         return Accuracy()
 
 
-def _available(world: World, loc: Loc) -> float:
+def _available(world: World, loc: PlaceLoc) -> float:
     if isinstance(loc, VialLoc):
         return world.inventory.vials[loc.vial].volume_ul
     return total_ul(mobile(world, loc))

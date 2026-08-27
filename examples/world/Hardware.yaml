@@ -15,6 +15,13 @@ pipettes:
     max_ul: 300
     tip_labware: [opentrons_96_tiprack_300ul]
     accuracy: { systematic_pct: 2.0, random_pct: 1.0, random_ul: 0.5 }   # placeholder until measured
+  - name: p300_multi_gen2      # eight channels: column steps ({ plate: P2, column: 1 }) use this one
+    mount: left
+    channels: 8
+    min_ul: 20
+    max_ul: 300
+    tip_labware: [opentrons_96_tiprack_300ul]
+    accuracy: { systematic_pct: 2.0, random_pct: 1.0, random_ul: 0.5 }
 
 labware:
   corning_96_wellplate_360ul_flat:

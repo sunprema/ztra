@@ -16,6 +16,7 @@ from ztra.compiler_errors import CompileError
 from ztra.schedule import Budget, schedule
 from ztra.protocol import (
     PROTOCOL_VERSION,
+    ColumnLoc,
     Condition,
     Delay,
     DisengageMagnet,
@@ -25,6 +26,7 @@ from ztra.protocol import (
     IfObserved,
     Loc,
     Mix,
+    PlaceLoc,
     Motion,
     Observe,
     Protocol,
@@ -166,6 +168,7 @@ class _Unroller:
         self.items: dict[str, dict[str, str | float]] = {}  # for_each variables in scope → the current item
         self.tip_scope: str | None = None  # the with_tip we are inside, if any
         self.anonymous_tips = 0
+        self.gangs = 0  # 8-channel steps issued so far
 
     def scope(self) -> dict[str, str]:
         """Every variable in scope, flattened for an op's origin: w → B2, item.volume_ul → 20."""
@@ -190,9 +193,9 @@ class _Unroller:
             if col not in self.items[name]:
                 raise CompileError("E_UNBOUND_VARIABLE", "a $name.column must name a column every item has", ref, f"one of {sorted(f'${name}.{c}' for c in self.items[name])}", ref, "add the column to every item, or fix the name", origin=origin)
             value = self.items[name][col]
-        if want == "volume" and not isinstance(value, float):
-            raise CompileError("E_VARIABLE_TYPE", "a variable used as a volume must hold a number", ref, "a number", repr(value), "give the column numeric values", origin=origin)
-        if want != "volume" and not isinstance(value, str):
+        if want in ("volume", "column") and not isinstance(value, float):
+            raise CompileError("E_VARIABLE_TYPE", f"a variable used as a {want} must hold a number", ref, "a number", repr(value), "give the column numeric values", origin=origin)
+        if want not in ("volume", "column") and not isinstance(value, str):
             raise CompileError("E_VARIABLE_TYPE", f"a variable used as a {want} must hold a name", ref, "a name", repr(value), f"give the column {want} names", origin=origin)
         return value
 
@@ -206,7 +209,33 @@ class _Unroller:
             return WellLoc(plate=loc.plate, well=str(self.resolve(loc.well, "well", origin)))
         if isinstance(loc, VialLoc) and loc.vial.startswith("$"):
             return VialLoc(vial=str(self.resolve(loc.vial, "vial", origin)))
+        if isinstance(loc, ColumnLoc) and isinstance(loc.column, str):
+            if not loc.column.startswith("$"):
+                raise CompileError("E_VARIABLE_TYPE", "a column is a number or a $variable", "column", "a number or $item.column", repr(loc.column), "write the column as a number", origin=origin)
+            return ColumnLoc(plate=loc.plate, column=int(float(self.resolve(loc.column, "column", origin))))
         return loc
+
+    def channel_wells(self, loc: Loc, origin: Origin) -> list[WellLoc]:
+        """The well each of the 8 channels touches at a location. A column of a plate is
+        one well per channel; a single-row trough is the same well for all of them."""
+        if isinstance(loc, VialLoc):
+            raise CompileError("E_PIPETTE_CHANNELS", "an 8-channel pipette cannot reach into a tube rack", loc.vial, "a column of a plate, or a trough well", "a vial", "use a single-well step for the vial", origin=origin)
+        p = self.world.inventory.plates.get(loc.plate)
+        if p is None:
+            raise CompileError("E_UNKNOWN_ENTITY", "every entity must exist in the world model", loc.plate, "a plate in Inventory.plates", "not found", "check the plate id", origin=origin)
+        d = self.world.hardware.labware[p.labware]
+        if isinstance(loc, ColumnLoc):
+            col = int(loc.column)
+            if not 1 <= col <= d.cols:
+                raise CompileError("E_COORDINATE", "a column must exist on the plate's labware", f"{loc.plate}:column {col}", f"1..{d.cols}", str(col), "use a column on the plate", origin=origin)
+            if d.rows == 1:
+                return [WellLoc(plate=loc.plate, well=WellCoord(0, col - 1).name)] * 8
+            if d.rows < 8:
+                raise CompileError("E_PIPETTE_CHANNELS", "an 8-channel pipette needs eight wells in a column, or one trough", loc.plate, "8 rows (or 1)", f"{d.rows} rows", "use single-well steps on this labware", origin=origin)
+            return [WellLoc(plate=loc.plate, well=WellCoord(r, col - 1).name) for r in range(8)]
+        if d.rows == 1:
+            return [loc] * 8
+        raise CompileError("E_PIPETTE_CHANNELS", "in an 8-channel step a plate is addressed by column, not by well", f"{loc.plate}:{loc.well}", "{ plate: …, column: N }", "a single well", "address the column, or make the whole step single-well", origin=origin)
 
     def volume(self, v: float | str, origin: Origin) -> float:
         if isinstance(v, str):
@@ -225,10 +254,25 @@ class _Unroller:
             elif isinstance(step, Transfer):
                 src, dst = self.bind(step.from_, origin), self.bind(step.to, origin)
                 vol = self.volume(step.volume_ul, origin)
-                out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=src, volume_ul=vol)], outputs=[Port(loc=dst, volume_ul=vol)], tip_name=self.tip_scope, aspirate=step.aspirate, dispense=step.dispense, air_gap_ul=step.air_gap_ul, origin=origin))
+                if isinstance(src, ColumnLoc) or isinstance(dst, ColumnLoc):
+                    self.gangs += 1
+                    gang = f"g{self.gangs}"
+                    for ch, (s, t) in enumerate(zip(self.channel_wells(src, origin), self.channel_wells(dst, origin))):
+                        out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=s, volume_ul=vol)], outputs=[Port(loc=t, volume_ul=vol)], tip_name=self.tip_scope, aspirate=step.aspirate, dispense=step.dispense, air_gap_ul=step.air_gap_ul, gang=gang, channel=ch, origin=origin))
+                else:
+                    out.append(Transform(kind=TransformKind.transfer, inputs=[Port(loc=src, volume_ul=vol)], outputs=[Port(loc=dst, volume_ul=vol)], tip_name=self.tip_scope, aspirate=step.aspirate, dispense=step.dispense, air_gap_ul=step.air_gap_ul, origin=origin))
             elif isinstance(step, Mix):
-                port = Port(loc=self.bind(step.at, origin), volume_ul=self.volume(step.volume_ul, origin))
-                out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, tip_name=self.tip_scope, position=step.position, origin=origin))
+                at = self.bind(step.at, origin)
+                vol = self.volume(step.volume_ul, origin)
+                if isinstance(at, ColumnLoc):
+                    self.gangs += 1
+                    gang = f"g{self.gangs}"
+                    for ch, w in enumerate(self.channel_wells(at, origin)):
+                        port = Port(loc=w, volume_ul=vol)
+                        out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, tip_name=self.tip_scope, position=step.position, gang=gang, channel=ch, origin=origin))
+                else:
+                    port = Port(loc=at, volume_ul=vol)
+                    out.append(Transform(kind=TransformKind.mix, inputs=[port], outputs=[port], repetitions=step.repetitions, tip_name=self.tip_scope, position=step.position, origin=origin))
             elif isinstance(step, WithTip):
                 if self.tip_scope is not None:
                     raise CompileError("E_TIP_SCOPE", "a pipette holds one tip; with_tip does not nest", f"with_tip {step.name or ''}".strip(), "no enclosing with_tip", f"inside with_tip {self.tip_scope}", "close the outer with_tip first", origin=origin)
@@ -320,9 +364,10 @@ class _PathState:
     cost: Cost
     tips: dict[str, _TipRecord] = field(default_factory=dict)  # named / shared tips still in play
     held: str | None = None  # the with_tip scope we are inside
+    gang_tips: dict[str, str] = field(default_factory=dict)  # the tip column each 8-channel step is using
 
     def fork(self) -> _PathState:
-        return _PathState(self.world.clone(), list(self.conditions), list(self.trace), Cost(**{**self.cost.__dict__, "reagent_consumed_ul": dict(self.cost.reagent_consumed_ul)}), dict(self.tips), self.held)
+        return _PathState(self.world.clone(), list(self.conditions), list(self.trace), Cost(**{**self.cost.__dict__, "reagent_consumed_ul": dict(self.cost.reagent_consumed_ul)}), dict(self.tips), self.held, dict(self.gang_tips))
 
 
 @dataclass
@@ -387,21 +432,24 @@ class _Checker:
             src, dst, vol = op.inputs[0].loc, op.outputs[0].loc, op.inputs[0].volume_ul
             if op.air_gap_ul < 0:
                 raise self.err(st, "E_PIPETTE_RANGE", origin, "an air gap is a volume of air", "air_gap_ul", ">= 0 uL", f"{fmt(op.air_gap_ul)} uL", "drop the minus sign")
-            pipette, cycles = self.choose_pipette(st, origin, vol, allow_split=True, reserve=op.air_gap_ul)
+            channels = 8 if op.gang else 1
+            pipette, cycles = self.choose_pipette(st, origin, vol, allow_split=True, reserve=op.air_gap_ul, channels=channels)
             self.check_motion(st, origin, src, op.aspirate, "aspirate")
             self.check_motion(st, origin, dst, op.dispense, "dispense")
             taken = self.take(st, origin, src, vol)
             self.check_destination(st, origin, dst, taken.liquids, vol)
-            tip, changed = self.use_tip(st, origin, pipette, op.tip_name, src)
+            tip, changed = self.gang_tip(st, origin, pipette, op, src)
             self.remove(st, src, vol)
             self.deposit(st, dst, taken.liquids)
             if taken.from_stock is not None:
                 st.cost.reagent_consumed_ul[taken.from_stock] = st.cost.reagent_consumed_ul.get(taken.from_stock, 0.0) + vol
-            st.cost.transfers += 1
-            st.cost.aspirations += cycles
-            st.cost.estimated_time_s += cycles * self.cost_model.seconds_per_aspiration_cycle + (self.cost_model.seconds_per_tip_change if changed else 0.0)
+            if op.gang is None or op.channel == 0:
+                st.cost.transfers += 1
+                st.cost.aspirations += cycles
+                st.cost.estimated_time_s += cycles * self.cost_model.seconds_per_aspiration_cycle + (self.cost_model.seconds_per_tip_change if changed else 0.0)
             plural = "s" if cycles > 1 else ""
-            st.trace.append(f"transfer {fmt(vol)} uL {loc_str(src)} -> {loc_str(dst)} with {pipette.name} ({cycles} cycle{plural}), tip {tip}")
+            ch = f" [channel {op.channel}]" if op.gang else ""
+            st.trace.append(f"transfer {fmt(vol)} uL {loc_str(src)} -> {loc_str(dst)} with {pipette.name}{ch} ({cycles} cycle{plural}), tip {tip}")
         elif op.kind is TransformKind.delay:
             seconds = op.seconds or 0.0
             st.cost.delays += 1
@@ -445,28 +493,40 @@ class _Checker:
             st.trace.append(f"replenish_tips {rack}: a person swaps in a fresh rack; every position is free again")
         else:
             at, vol = op.inputs[0].loc, op.inputs[0].volume_ul
-            pipette, _ = self.choose_pipette(st, origin, vol, allow_split=False)
+            pipette, _ = self.choose_pipette(st, origin, vol, allow_split=False, channels=8 if op.gang else 1)
             self.check_motion(st, origin, at, op.position, "mix")
             self.take(st, origin, at, vol)  # checks presence and volume; nothing moves
-            tip, changed = self.use_tip(st, origin, pipette, op.tip_name, at)
+            tip, changed = self.gang_tip(st, origin, pipette, op, at)
             reps = op.repetitions or 1
-            st.cost.mixes += 1
-            st.cost.estimated_time_s += reps * self.cost_model.seconds_per_mix_repetition + (self.cost_model.seconds_per_tip_change if changed else 0.0)
+            if op.gang is None or op.channel == 0:
+                st.cost.mixes += 1
+                st.cost.estimated_time_s += reps * self.cost_model.seconds_per_mix_repetition + (self.cost_model.seconds_per_tip_change if changed else 0.0)
             st.trace.append(f"mix {fmt(vol)} uL x{reps} at {loc_str(at)} with {pipette.name}, tip {tip}")
 
-    def use_tip(self, st: _PathState, origin: Origin, pipette: Pipette, name: str | None, source: Loc) -> tuple[str, bool]:
+    def gang_tip(self, st: _PathState, origin: Origin, pipette: Pipette, op: Transform, source: PlaceLoc) -> tuple[str, bool]:
+        """Channel 0 of an 8-channel step takes a whole column of tips; the other channels
+        ride on it. A single-channel step takes one tip."""
+        if op.gang is None:
+            return self.use_tip(st, origin, pipette, op.tip_name, source, 1)
+        if op.channel == 0:
+            tip, changed = self.use_tip(st, origin, pipette, op.tip_name, source, 8)
+            st.gang_tips[op.gang] = tip
+            return tip, changed
+        return st.gang_tips[op.gang], False
+
+    def use_tip(self, st: _PathState, origin: Origin, pipette: Pipette, name: str | None, source: PlaceLoc, channels: int) -> tuple[str, bool]:
         """The tip a step uses: a fresh one, or the shared/named tip of the enclosing with_tip.
         Returns its description and whether a tip was picked up for this step."""
         if name is None:
-            st.cost.tips_used += 1
-            return self.allocate_tip(st, origin, pipette), True
+            st.cost.tips_used += channels
+            return self.allocate_tip(st, origin, pipette, channels), True
         where = loc_str(source)
         rec = st.tips.get(name)
         if rec is None:
-            rack_well = self.allocate_tip(st, origin, pipette)
+            rack_well = self.allocate_tip(st, origin, pipette, channels)
             rack, well = rack_well.split(":")
             st.tips[name] = _TipRecord(rack, well, pipette.name, where)
-            st.cost.tips_used += 1
+            st.cost.tips_used += channels
             return f"{rack_well} ({name})", True
         if rec.pipette != pipette.name:
             raise self.err(st, "E_TIP_PIPETTE", origin, "a tip fits one pipette; every step under one with_tip must use the same pipette", name, rec.pipette, pipette.name, "keep volumes within one pipette's range, or use separate with_tip blocks")
@@ -474,19 +534,22 @@ class _Checker:
             raise self.err(st, "E_TIP_CONTAMINATION", origin, "a shared tip may only ever draw from one location, or it carries liquid between sources", name, f"drawing from {rec.source}", f"drawing from {where}", "use a fresh tip (a separate with_tip, or none) for each source")
         return f"{rec.rack}:{rec.well} ({name}, kept)", False
 
-    def choose_pipette(self, st: _PathState, origin: Origin, vol: float, allow_split: bool, reserve: float = 0.0) -> tuple[Pipette, int]:
+    def choose_pipette(self, st: _PathState, origin: Origin, vol: float, allow_split: bool, reserve: float = 0.0, channels: int = 1) -> tuple[Pipette, int]:
         if not (vol > 0) or vol == float("inf"):
             raise self.err(st, "E_PIPETTE_RANGE", origin, "a volume must be positive", "volume", "> 0 uL", f"{vol} uL", "fix the volume")
-        found = self.base.hardware.pipette_for(vol, allow_split, reserve)
+        found = self.base.hardware.pipette_for(vol, allow_split, reserve, channels)
         if found is not None:
             return found[0], found[1]
+        if not any(p.channels == channels for p in self.base.hardware.pipettes):
+            have = sorted({p.channels for p in self.base.hardware.pipettes})
+            raise self.err(st, "E_PIPETTE_CHANNELS", origin, "a step needs a pipette with the right number of channels", "pipettes", f"a {channels}-channel pipette", f"only {have}-channel pipette(s)", "add the pipette to Hardware.yaml, or address wells instead of columns" if channels == 8 else "add a single-channel pipette, or address whole columns")
         ranges = self.base.hardware.pipette_ranges() or "at least one pipette"
         if reserve > 0 and self.base.hardware.pipette_for(vol, allow_split) is not None:
             raise self.err(st, "E_PIPETTE_RANGE", origin, "the air gap rides in the tip with the liquid, so it needs room", "air_gap_ul", "less than the pipette's maximum", f"{fmt(reserve)} uL", "use a smaller air gap")
         hint = "use a volume >= the smallest pipette minimum" if allow_split else "mix volumes cannot be split; use a volume within one pipette's range"
         raise self.err(st, "E_PIPETTE_RANGE", origin, "a volume must lie within some pipette's range", "pipettes", ranges, f"{fmt(vol)} uL", hint)
 
-    def check_motion(self, st: _PathState, origin: Origin, loc: Loc, m: Motion | None, what: str) -> None:
+    def check_motion(self, st: _PathState, origin: Origin, loc: PlaceLoc, m: Motion | None, what: str) -> None:
         """A position must stay inside the well and a flow rate inside the safe envelope."""
         if m is None:
             return
@@ -507,7 +570,7 @@ class _Checker:
         if d.well_diameter_mm is not None and abs(m.side_mm) > d.well_diameter_mm / 2:
             raise self.err(st, "E_POSITION", origin, "the tip must stay inside the well", where, f"|side| <= {fmt(d.well_diameter_mm / 2)} mm", f"{fmt(m.side_mm)} mm", "the well is narrower than that")
 
-    def labware_at(self, loc: Loc) -> LabwareDef | None:
+    def labware_at(self, loc: PlaceLoc) -> LabwareDef | None:
         w = self.base
         if isinstance(loc, WellLoc):
             p = w.inventory.plates.get(loc.plate)
@@ -516,7 +579,7 @@ class _Checker:
         rack = w.deck.tube_racks.get(link.rack) if link else None
         return w.hardware.labware.get(rack.labware) if rack else None
 
-    def take(self, st: _PathState, origin: Origin, loc: Loc, vol: float) -> _Taken:
+    def take(self, st: _PathState, origin: Origin, loc: PlaceLoc, vol: float) -> _Taken:
         """Check that this much can be drawn from here, and say what would come out."""
         if isinstance(loc, VialLoc):
             vial = st.world.inventory.vials.get(loc.vial)
@@ -553,7 +616,7 @@ class _Checker:
         cap = definition.well_max_ul if definition.well_max_ul is not None else float("inf")
         return cap, list(p.wells.get(well, []))
 
-    def check_destination(self, st: _PathState, origin: Origin, to: Loc, incoming: list[Liquid], vol: float) -> None:
+    def check_destination(self, st: _PathState, origin: Origin, to: PlaceLoc, incoming: list[Liquid], vol: float) -> None:
         reagents = self.base.inventory.reagents
         if isinstance(to, WellLoc):
             cap, contents = self.well(st, origin, to.plate, to.well)
@@ -580,26 +643,28 @@ class _Checker:
             if definition is not None and definition.well_max_ul is not None and vial.volume_ul + vol > definition.well_max_ul + EPS:
                 raise self.err(st, "E_OVERFLOW", origin, "a tube cannot hold more than its rack labware allows", to.vial, f"<= {fmt(definition.well_max_ul)} uL", f"{fmt(vial.volume_ul + vol)} uL", "use a larger tube")
 
-    def allocate_tip(self, st: _PathState, origin: Origin, pipette: Pipette) -> str:
-        tip = st.world.deck.take_tip(self.base.hardware, pipette)
+    def allocate_tip(self, st: _PathState, origin: Origin, pipette: Pipette, channels: int = 1) -> str:
+        tip = st.world.deck.take_column(self.base.hardware, pipette) if channels > 1 else st.world.deck.take_tip(self.base.hardware, pipette)
         if tip is not None:
             return f"{tip[0]}:{tip[1]}"
         n = st.world.deck.compatible_racks(pipette)
         actual = "no compatible tip rack on the deck" if n == 0 else f"{n} compatible rack(s), all exhausted"
+        if channels > 1:
+            raise self.err(st, "E_TIPS", origin, "an 8-channel step takes a whole free column of tips", pipette.name, "a column with all 8 tips in a placed rack compatible with the pipette", actual if n == 0 else f"{n} compatible rack(s), no full column left", "add or replace a tip rack in Deck.yaml")
         raise self.err(st, "E_TIPS", origin, "every transfer and mix uses one tip, and tips run out", pipette.name, "a free tip in a placed rack compatible with the pipette", actual, "add or replace a tip rack in Deck.yaml")
 
-    def remove(self, st: _PathState, src: Loc, vol: float) -> None:
+    def remove(self, st: _PathState, src: PlaceLoc, vol: float) -> None:
         if remove_liquid(st.world, src, vol) and isinstance(src, VialLoc):
             st.trace.append(f"{src.vial} is now consumed (linear resource retired)")
 
-    def deposit(self, st: _PathState, dst: Loc, liquids: list[Liquid]) -> None:
+    def deposit(self, st: _PathState, dst: PlaceLoc, liquids: list[Liquid]) -> None:
         deposit_liquid(st.world, dst, liquids)
 
 
 # ---------------------------------------------------------------- liquid transitions (shared with the simulator)
 
 
-def liquids_at(world: World, loc: Loc) -> list[Liquid]:
+def liquids_at(world: World, loc: PlaceLoc) -> list[Liquid]:
     """What is at a location right now, as a list of (reagent, volume)."""
     if isinstance(loc, VialLoc):
         v = world.inventory.vials[loc.vial]
@@ -613,7 +678,7 @@ def pelleted(world: World, plate: str) -> bool:
     return under is not None and under[1].engaged
 
 
-def mobile(world: World, loc: Loc) -> list[Liquid]:
+def mobile(world: World, loc: PlaceLoc) -> list[Liquid]:
     """What can actually be drawn from a location: everything, unless a magnet is holding the beads."""
     contents = liquids_at(world, loc)
     if isinstance(loc, WellLoc) and pelleted(world, loc.plate):
@@ -622,7 +687,7 @@ def mobile(world: World, loc: Loc) -> list[Liquid]:
     return contents
 
 
-def take_liquids(world: World, loc: Loc, vol: float) -> list[Liquid]:
+def take_liquids(world: World, loc: PlaceLoc, vol: float) -> list[Liquid]:
     """The mixture `vol` µL drawn from a location would contain. No checks."""
     contents = mobile(world, loc)
     total = total_ul(contents)
@@ -631,7 +696,7 @@ def take_liquids(world: World, loc: Loc, vol: float) -> list[Liquid]:
     return [Liquid(reagent=l.reagent, volume_ul=vol * l.volume_ul / total) for l in contents]
 
 
-def remove_liquid(world: World, src: Loc, vol: float) -> bool:
+def remove_liquid(world: World, src: PlaceLoc, vol: float) -> bool:
     """Take `vol` out of a location. Returns True if a vial just became consumed."""
     if isinstance(src, VialLoc):
         vial = world.inventory.vials[src.vial]
@@ -651,7 +716,7 @@ def remove_liquid(world: World, src: Loc, vol: float) -> bool:
     return False
 
 
-def deposit_liquid(world: World, dst: Loc, liquids: list[Liquid]) -> None:
+def deposit_liquid(world: World, dst: PlaceLoc, liquids: list[Liquid]) -> None:
     if isinstance(dst, VialLoc):
         world.inventory.vials[dst.vial].volume_ul += total_ul(liquids)
         return

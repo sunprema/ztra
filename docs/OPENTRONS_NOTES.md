@@ -144,6 +144,18 @@ run does; ideal pipettes, so it complements the `FakeDriver` (noise, faults) rat
   default engage height 20 (`parameters.magneticModuleEngageHeight`); of `nest_96_wellplate_2ml_deep`
   (the bead-wash plate): 2000 µL, depth 38, 8.2 × 8.2 mm square wells, height 41, default engage height 6.8.
 
+## Multi-channel pipettes — probed 2026-08-26 (opentrons 8.8.2, apiLevel 2.22)
+
+- `pick_up_tip(rack["A3"])` with an 8-channel takes the whole column (all eight `has_tip` go false); a
+  column aspirate from a trough draws 8× the volume from that one well; a column dispense tracks each of the
+  eight destination wells; a column dispense into a one-well reservoir adds 8×. So ztra's gang model — eight
+  per-well operations, one action — matches the engine's tracking exactly.
+- `return_tip()` puts the column back and an explicit `pick_up_tip(rack["A3"])` takes it again.
+- The engine does **not** stop a multi-channel aspirate targeted at a non-A-row well, nor a pickup from a
+  column already used; ztra enforces both (columns are addressed by their top well; a column of tips must be
+  whole).
+- Multi-channel pipettes cannot address a tube rack; ztra refuses that at compile time.
+
 ## What real protocols need
 
 The vendor's community Cookbook was reviewed 2026-08-26 as evidence of what working protocols actually

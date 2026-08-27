@@ -128,11 +128,13 @@ def _run(base: World, ops: list[Transform | ObserveOp], rng: random.Random | Non
             vial.state = ThermalState.thawed
             vial.freeze_thaw_cycles += 1
             continue
-        # a fresh tip per transfer/mix, or one per with_tip — same as the compiler decided
-        found = run.world.hardware.pipette_for(op.inputs[0].volume_ul, op.kind is TransformKind.transfer)
+        # a fresh tip per transfer/mix, or one per with_tip — same as the compiler decided;
+        # channel 0 of an 8-channel step takes the column, the other channels ride on it
+        channels = 8 if op.gang else 1
+        found = run.world.hardware.pipette_for(op.inputs[0].volume_ul, op.kind is TransformKind.transfer, op.air_gap_ul, channels)
         pip = found[0] if found is not None else None
-        if pip is not None and (op.tip_name is None or op.tip_name not in run.named_tips):
-            taken = run.world.deck.take_tip(run.world.hardware, pip)
+        if pip is not None and (op.gang is None or op.channel == 0) and (op.tip_name is None or op.tip_name not in run.named_tips):
+            taken = run.world.deck.take_column(run.world.hardware, pip) if channels > 1 else run.world.deck.take_tip(run.world.hardware, pip)
             if op.tip_name is not None and taken is not None:
                 run.named_tips.add(op.tip_name)
                 run.named_tips.add(f"{taken[0]}/{op.tip_name}")
