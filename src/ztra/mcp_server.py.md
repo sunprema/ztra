@@ -1,3 +1,10 @@
+---
+path: "src/ztra/mcp_server.py"
+summary: "ztra's MCP server: the agent-facing tool interface wrapping the same core the CLI calls."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: false
+---
+
 ztra's actual agent interface — this is the process this very conversation talks to over stdio (`ztra-mcp`, picked up from the repo's `.mcp.json`) when it calls tools like `world_summary` or `compile_protocol`. Per ARCHITECTURE.md §6, this is the MCP server wrapping the core in-process (IF-2.1); REST/gRPC is future scope.
 
 Every tool follows the same failure contract: refusals never raise as exceptions across the tool boundary, they come back as `{"ok": false, "error": {code, message, hint, ...}}` using the same error codes (`E_*` compile, `W_*` world, `S_*` store, `D_*` diff) as the CLI, via the `_run` wrapper that catches `_Refusal`/`CompileError`/`StoreError`/`DiffError`/`DriverFault` uniformly. `_Refusal` is the internal-only exception the helper functions (`_world`, `_protocol`, `_telemetry`, `_budget`, `_store`) raise to signal "bad input" in a way `_run` knows how to translate — it never escapes this module.

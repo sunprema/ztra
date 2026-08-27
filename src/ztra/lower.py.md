@@ -1,3 +1,13 @@
+---
+path: "src/ztra/lower.py"
+summary: "Lowering turns PIR-H into PIR-L, resolving deck addresses and tips and splitting a branch into a tree of segments."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: true
+---
+
+> [!WARNING]
+> **Nexus desync** — explainer says "each branch arm gets `path.copy()`'d state"; the code only copies the path for the `then` arm (`self.build(path.copy(), op.then, inner)`) and passes the original, uncopied path to the `otherwise` arm (`self.build(path, op.otherwise, inner)`).
+
 # lower.py
 
 Lowering turns PIR-H (abstract, vendor-neutral) into PIR-L (concrete robot ops) and resolves

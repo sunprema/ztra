@@ -1,3 +1,10 @@
+---
+path: "src/ztra/compiler_errors.py"
+summary: "CompileError: the structured, agent-readable exception every compiler and lowering failure raises."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: false
+---
+
 # compiler_errors.py
 
 `CompileError` is the one exception type every compiler and lowering failure raises, and it's

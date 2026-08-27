@@ -1,3 +1,10 @@
+---
+path: "src/ztra/preflight.py"
+summary: "Preflight: totals a protocol's resource needs across every branch path before anything runs."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: false
+---
+
 # preflight.py
 
 The compiler stops at the *first* impossible step and reports just that one failure. Preflight

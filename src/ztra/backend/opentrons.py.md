@@ -1,3 +1,13 @@
+---
+path: "src/ztra/backend/opentrons.py"
+summary: "Turns one PIR-L segment into a runnable Opentrons Protocol API v2 Python file."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: true
+---
+
+> [!WARNING]
+> **Nexus desync** — explainer says OT-2/Flex trash handling "comes from Hardware.yaml, not from branching backend code" and that every op gets a preceding comment; the code branches directly on `hw.robot.model` for trash and the robot string, and a comment is only emitted when an op's `origin` differs from the previous op's, not for every op.
+
 Turns one PIR-L segment into a runnable Opentrons Protocol API v2 file. This is the only place that speaks the vendor's syntax; everything upstream (compiler, lowering) stays vendor-neutral.
 
 `emit_segment` writes straight-line Python: load labware/modules/pipettes from the world model, declare starting liquids so the Opentrons app can show initial deck state, then translate each lowered op (`Aspirate`, `Dispense`, `PickUpTip`, …) to the matching pipette call. OT-2 and Flex differ only in a few details — trash handling, robot/API strings — and those come from `Hardware.yaml`, not from branching backend code.

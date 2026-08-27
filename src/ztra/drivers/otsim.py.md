@@ -1,3 +1,10 @@
+---
+path: "src/ztra/drivers/otsim.py"
+summary: "OpentronsSimDriver: cross-checks the fake lab against Opentrons' own simulator, aborting on any liquid-volume disagreement."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: false
+---
+
 A second, independent check on the fake lab: this driver runs every segment through Opentrons' *real* simulator (`opentrons_simulate`, in a separate vendor venv pointed to by `ZTRA_OT_SIM_OT2`/`ZTRA_OT_SIM_FLEX`) and aborts the run if the vendor's own tracked liquid volumes disagree with ztra's, at every pause and at the end. Disagreement means ztra's physics or lowering has a bug — the vendor engine is a second, independently written model of the same run.
 
 The mechanics: `_run_vendor` writes the segment's generated Python plus a small `HARNESS` script to a temp dir and runs it under the vendor venv's own `python`. The harness monkey-patches `ctx.pause` to snapshot every tracked well's volume before each pause, since that's the only hook available to observe intermediate vendor state; everything the vendor prints goes to stderr so only the harness's one JSON object reaches stdout.

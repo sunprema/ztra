@@ -1,3 +1,10 @@
+---
+path: "src/ztra/protocol.py"
+summary: "The Protocol AST: the schema for a bounded, agent-writable experiment."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: false
+---
+
 # src/ztra/protocol.py
 
 The Protocol AST — the schema for the experiment an agent writes. Per ARCHITECTURE.md §4.2, this is

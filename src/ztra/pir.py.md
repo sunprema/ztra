@@ -1,3 +1,10 @@
+---
+path: "src/ztra/pir.py"
+summary: "Defines PIR-H, the vendor-neutral, already-unrolled intermediate representation the compiler produces."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: false
+---
+
 # pir.py
 
 Defines PIR-H, the vendor-neutral form the compiler, store, and diff engine all reason about.

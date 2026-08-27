@@ -1,3 +1,10 @@
+---
+path: "src/ztra/drivers/fake.py"
+summary: "FakeDriver: a pretend lab that applies lowered ops to its own physical world, with pipette sloppiness and fault injection."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: false
+---
+
 A pretend lab: the only thing that stands in for hardware today, since no real robot exists yet. `FakeDriver` keeps its own `physical` copy of the world — the ground truth the rest of ztra never sees directly, only through sensors — and applies each lowered op to it, complete with realistic pipette sloppiness (a per-pipette systematic bias drawn once at construction, plus per-dispense random noise) unless `accurate=True` asks for ideal pipettes instead.
 
 Two things make this more than a toy:

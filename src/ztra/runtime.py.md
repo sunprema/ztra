@@ -1,3 +1,13 @@
+---
+path: "src/ztra/runtime.py"
+summary: "The runtime: dispatches an intent's lowered program one segment at a time, never twice, recording partial or complete results."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: true
+---
+
+> [!WARNING]
+> **Nexus desync** — explainer implies the run-journal check happens before the fast-forward check; the code actually checks `is_fast_forward_of_main` first and the journal second. It also says `_Hooks.on_observe` "pulls a reading" from the `TelemetryService`; the code (`self.telemetry.read(op.sensor, op.label)`) takes a new reading, it doesn't retrieve an existing one — the actual pull happens later in `run()`'s decide-handling logic.
+
 The runtime is the one component that actually dispatches physical work, and it's built around never doing that twice by accident. Before running anything it checks a run journal (`.ztra/runs/<intent-hash>.json`) for a `"dispatched"` status left over from a previous attempt — if one exists, it refuses (`S_RUN_IN_PROGRESS`) rather than risk sending the same protocol to the robot again after a crash; a person has to check the robot and delete the journal to clear it. It also refuses if the branch isn't a fast-forward of `main` (reality moved on — rebase first) or if the supplied `approve` callback says no.
 
 `run()` walks the intent's lowered program one **segment** at a time — a segment is straight-line PIR-L ending in a `halt` or a `decide` — because a vendor robot can't change course mid-run on an external reading. After each segment, if it ended on a `Decide`, the runtime finds the telemetry reading the decision names, evaluates the same branch condition the compiler checked (`evaluate()`, shared with the simulator so prediction and execution agree on what a condition means), and picks the next segment. `_Hooks` is the thin adapter the driver calls into: `on_observe` pulls a reading from the `TelemetryService`, `on_pause` is a no-op for now (a real driver would wait for a person), `on_op_done` just logs which ops actually completed — that log is what makes a partial run reconstructable.

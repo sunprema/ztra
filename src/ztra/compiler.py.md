@@ -1,3 +1,13 @@
+---
+path: "src/ztra/compiler.py"
+summary: "The compiler: an abstract interpreter that checks a protocol against a cloned world, forking at branches into one outcome per path."
+source_commit: 265513cb0646a77c6b0f3485c43d77b1117e0f21
+desynced: true
+---
+
+> [!WARNING]
+> **Nexus desync** — explainer says the compiler "works in two passes" (`_Unroller` then `_Checker`); `compile()` also validates the world up front and, when a budget is given, runs `schedule()` between unrolling and checking to insert observe steps — a third, conditional pass the "two passes" framing omits.
+
 # compiler.py
 
 The compiler is an abstract interpreter: it runs the protocol against a cloned copy of the
