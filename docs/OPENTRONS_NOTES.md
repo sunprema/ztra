@@ -141,7 +141,8 @@ run does; ideal pipettes, so it complements the `FakeDriver` (noise, faults) rat
   are a refinement on top; the two agree on totals, which is what the vendor-sim cross-check compares.
 - Flex has no magnetic module; its **magnetic block** is passive (the gripper moves the plate) and is not modelled.
 - Geometry of `nest_96_wellplate_100ul_pcr_full_skirt`: 100 µL, depth 14.78, diameter 5.34, height 15.7,
-  default engage height 20 (`parameters.magneticModuleEngageHeight`).
+  default engage height 20 (`parameters.magneticModuleEngageHeight`); of `nest_96_wellplate_2ml_deep`
+  (the bead-wash plate): 2000 µL, depth 38, 8.2 × 8.2 mm square wells, height 41, default engage height 6.8.
 
 ## What real protocols need
 

@@ -41,8 +41,8 @@ steps:
     seconds: 0
 
   - op: with_tip                            # one tip for the whole body instead of one per step
-    name: t_A1                              # optional: a named tip returns to its rack position and can
-    body: [ ...steps... ]                   #   be picked up again later by the same name
+    name: tip_$w                            # optional: a named tip returns to its rack position and can
+    body: [ ...steps... ]                   #   be picked up again later by the same name; $vars are expanded
 
   - op: replenish_tips                      # a person swaps in a fresh rack; the robot pauses for it
     rack: TIPS1                             # every position is free again from here on
@@ -88,8 +88,9 @@ Unknown fields and unknown `op`s are rejected at load.
 
 - `repeat.times` is a literal ≥ 1; `for_wells.wells` and `for_each.items` are explicit lists. There is no `while`, no recursion, no arithmetic.
 - `$name` (from `for_wells`) may appear in `well:` fields; `$name.column` (from `for_each`) may appear in
-  `well:`, `vial:` and `volume_ul:` fields, and must hold a name or a number respectively. Variables must be
-  bound by an enclosing loop; nested loops need different names.
+  `well:`, `vial:` and `volume_ul:` fields, and must hold a name or a number respectively; either may be
+  embedded in a `with_tip` name (`tip_$w`). Variables must be bound by an enclosing loop; nested loops need
+  different names.
 - `if_observed` may only test an `observe` that appears **earlier on the same path**. A label taken inside
   one arm of a branch is not visible after the branch.
 - Branching multiplies the number of paths the compiler must check; more than **64 paths** (`MAX_PATHS`)

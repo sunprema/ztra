@@ -109,9 +109,9 @@ def test_lowering_and_vendor_code(world: World) -> None:
     mags = [op for op in program.segments[0].ops if isinstance(op, Magnet)]
     assert [(m.engaged, m.height_mm) for m in mags] == [(True, 6.5), (False, None)]
     src = emit_program(world, program)[0][1]
-    assert '    MAG1 = ctx.load_module("magnetic module gen2", "6")\n    P2 = MAG1.load_labware("nest_96_wellplate_100ul_pcr_full_skirt")\n' in src
+    assert '    MAG1 = ctx.load_module("magnetic module gen2", "6")\n    P2 = MAG1.load_labware("nest_96_wellplate_2ml_deep")\n' in src
     assert "    MAG1.engage(height_from_base=6.5)\n" in src and "    MAG1.disengage()\n" in src
-    assert 'ctx.load_labware("nest_96_wellplate_100ul_pcr_full_skirt"' not in src
+    assert 'ctx.load_labware("nest_96_wellplate_2ml_deep"' not in src
     # every engine ends on the same world
     assert nominal_world(world, paths(out.pir)[0][1]).hash() == out.outcomes[0].world_hash
     assert trace(world, Protocol.from_yaml(WASH))[-1].world.hash() == out.outcomes[0].world_hash

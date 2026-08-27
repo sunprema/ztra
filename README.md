@@ -50,6 +50,9 @@ ztra compile examples/world examples/protocols/enzyme_dilution.yaml
 
 # see it fail usefully
 ztra compile examples/world examples/protocols/bad_loop_drains_vial.yaml
+
+# a real workflow: a three-round magnetic-bead wash, with a scale reading every four steps
+ztra compile examples/world examples/protocols/bead_wash.yaml --budget "sensor=scale_2,every=4"
 ```
 
 `ztra --help` shows the rest: `preflight` (do we have enough stock?), `simulate`, `store` (the version history), `run`, and `diff`. There is also an MCP server (`ztra-mcp`) that exposes the whole loop as tools, so agents like Claude can drive it directly.

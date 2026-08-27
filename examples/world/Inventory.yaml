@@ -44,12 +44,13 @@ plates:
     wells:
       A1:
         - { reagent: water, volume_ul: 50 }
-  P2:                         # a PCR plate on the magnetic module; A1 holds a bead suspension
-    labware: nest_96_wellplate_100ul_pcr_full_skirt
+  P2:                         # a deep-well plate on the magnetic module; four bead suspensions
+    labware: nest_96_wellplate_2ml_deep
     wells:
-      A1:
-        - { reagent: beads, volume_ul: 20 }
-        - { reagent: water, volume_ul: 80 }
+      A1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
+      B1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
+      C1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
+      D1: [ { reagent: beads, volume_ul: 20 }, { reagent: water, volume_ul: 80 } ]
   RES1:                       # a 12-channel trough of wash buffer, addressed like a 1x12 plate
     labware: nest_12_reservoir_15ml
     wells:

@@ -33,14 +33,14 @@ labware:
     height_mm: 43.0
     well_depth_mm: 37.9
     well_diameter_mm: 10.2
-  nest_96_wellplate_100ul_pcr_full_skirt:
+  nest_96_wellplate_2ml_deep:
     kind: plate
     rows: 8
     cols: 12
-    well_max_ul: 100
-    height_mm: 15.7
-    well_depth_mm: 14.78
-    well_diameter_mm: 5.34
+    well_max_ul: 2000
+    height_mm: 41.0
+    well_depth_mm: 38.0
+    well_diameter_mm: 8.2
   nest_12_reservoir_15ml:
     kind: reservoir
     rows: 1
@@ -68,6 +68,12 @@ sensors:
   scale_1:
     kind: plate_mass
     observes: { entity: P1 }
+    sigma: 0.5
+    unit: mg
+    read_time_s: 5
+  scale_2:
+    kind: plate_mass
+    observes: { entity: P2 }
     sigma: 0.5
     unit: mg
     read_time_s: 5

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -195,6 +196,10 @@ class _Unroller:
             raise CompileError("E_VARIABLE_TYPE", f"a variable used as a {want} must hold a name", ref, "a name", repr(value), f"give the column {want} names", origin=origin)
         return value
 
+    def interpolate(self, text: str, origin: Origin) -> str:
+        """Replace every `$var` / `$var.column` inside a name: tip_$w → tip_A1."""
+        return re.sub(r"\$[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?", lambda m: str(self.resolve(m.group(0), "name", origin)), text)
+
     def bind(self, loc: Loc, origin: Origin) -> Loc:
         """Replace `$...` in a well or vial field with what it stands for."""
         if isinstance(loc, WellLoc) and loc.well.startswith("$"):
@@ -229,7 +234,7 @@ class _Unroller:
                     raise CompileError("E_TIP_SCOPE", "a pipette holds one tip; with_tip does not nest", f"with_tip {step.name or ''}".strip(), "no enclosing with_tip", f"inside with_tip {self.tip_scope}", "close the outer with_tip first", origin=origin)
                 if step.name is None:
                     self.anonymous_tips += 1
-                name = step.name or f"_tip{self.anonymous_tips}"
+                name = self.interpolate(step.name, origin) if step.name else f"_tip{self.anonymous_tips}"
                 out.append(Transform(kind=TransformKind.tip, inputs=[], outputs=[], tip_name=name, tip_action="pick", origin=origin))
                 self.tip_scope = name
                 out.extend(self.unroll(step.body, [*path, i], iters))

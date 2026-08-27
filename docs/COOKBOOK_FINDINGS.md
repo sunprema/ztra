@@ -58,9 +58,16 @@ workflow that needs them all. Sizes: S = a day or less, M = days, L = a week-sca
    row-of-rack addressing, column-wise transfers: this reaches deepest into lowering, tip accounting and
    the compiler, which is why it goes last, on top of the settled foundations.
 
-**Acceptance test for the lot:** the cookbook's wash-step + supernatant-removal recipes, written as a ztra
-protocol, compiled with a budget, run on the vendor-sim driver. When that works, ztra expresses the
-cookbook's hardest real workflow end to end.
+**Acceptance test for the lot — passed 2026-08-26 (single-channel):** the cookbook's wash-step +
+supernatant-removal recipes as [`examples/protocols/bead_wash.yaml`](../examples/protocols/bead_wash.yaml):
+four samples, three rounds, a per-round table for the supernatant volume, one clean tip per round for the
+buffer and one dedicated tip per sample kept across rounds, pellet, gentle off-pellet aspiration with an air
+gap, blow-out into the waste. It compiles with a scale budget to a single predicted world (every sample ends
+as 20 µL of beads, the waste holds exactly the water and buffer that left), preflights feasible on 7 tips,
+lowers to one vendor file, runs on the fake lab, and runs inside the vendor engine with every volume
+agreeing (`tests/test_wash_acceptance.py`). One difference from the cookbook, on purpose: the cookbook reuses
+each sample's tip to draw buffer from the shared trough in later rounds; ztra's one-source rule refuses that,
+so the buffer goes on from above with a clean tip instead. Gap 7 remains: this is the single-channel form.
 
 ## Confirmed non-goals
 

@@ -1,0 +1,62 @@
+# The Opentrons Cookbook's magnetic-bead wash, written as a ztra protocol.
+# Four samples on the deep-well plate over the magnetic module (P2 A1..D1), three
+# wash rounds each: add buffer from above with one clean tip, resuspend each sample
+# with its own dedicated tip, pellet on the magnet, draw the supernatant off gently
+# with that same tip, release. The first round also clears the original liquid, so
+# it draws more than the later ones — that is the per-round table.
+#
+# Try:   ztra compile examples/world examples/protocols/bead_wash.yaml --budget "sensor=scale_2,every=4"
+version: 1
+name: bead_wash_three_rounds
+steps:
+  - op: for_each
+    as: round
+    items:
+      - { supernatant_ul: 260 }   # 80 uL of the original liquid + 180 uL of buffer
+      - { supernatant_ul: 180 }
+      - { supernatant_ul: 180 }
+    body:
+      # 1. wash buffer onto every sample, dispensed from above so the tip stays clean
+      - op: with_tip
+        body:
+          - op: for_wells
+            wells: [A1..D1]
+            as: w
+            body:
+              - op: transfer
+                from: { plate: RES1, well: A1 }
+                to: { plate: P2, well: $w }
+                volume_ul: 180
+                dispense: { at: top, offset_mm: -2, blow_out: true }
+
+      # 2. resuspend the beads, each sample with its own tip (kept for step 4)
+      - op: for_wells
+        wells: [A1..D1]
+        as: w
+        body:
+          - op: with_tip
+            name: tip_$w
+            body:
+              - { op: mix, at: { plate: P2, well: $w }, volume_ul: 100, repetitions: 5 }
+
+      # 3. pellet
+      - { op: engage_magnet, module: MAG1, height_mm: 6.5 }
+      - { op: delay, minutes: 3 }
+
+      # 4. supernatant to waste: gently, off to the side of the pellet, with an air gap
+      - op: for_wells
+        wells: [A1..D1]
+        as: w
+        body:
+          - op: with_tip
+            name: tip_$w
+            body:
+              - op: transfer
+                from: { plate: P2, well: $w }
+                to: { plate: WASTE, well: A1 }
+                volume_ul: $round.supernatant_ul
+                aspirate: { offset_mm: 0.5, side_mm: -1, rate_ul_s: 20 }
+                dispense: { at: top, offset_mm: -3, blow_out: true }
+                air_gap_ul: 10
+
+      - { op: disengage_magnet, module: MAG1 }
